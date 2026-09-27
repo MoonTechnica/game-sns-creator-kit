@@ -192,6 +192,12 @@ input.onModeChange(() => drawHelp())            // 入力方法が変わった�
 - ゲームパッドのボタン名は **`input.padLabel(action)`** で機種に合わせる（PS: `×` / Xbox: `A` / Switch: `B`。
   分からなければ「下のボタン」）。「×で決定」のように機種を決めつけて書かない。
 
+### Phaser で作るとき
+
+Phaser 4 を使うゲーム（`$game-phaser`）も、キーボードとゲームパッドは**この入力キット**で読む。Phaser の設定を
+`input: { keyboard: false, gamepad: false }` にして、Phaser からはポインタ（ゲームの物のタップ・ドラッグ）だけを使う
+（両方で読むと同じキーで 2 回動く）。キットの `root` は `document.body`、`input.endFrame()` はシーンの `update()` の最後に呼ぶ。
+
 ## 5. やってはいけないこと
 
 | 禁止 | 代わりに |

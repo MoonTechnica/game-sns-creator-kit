@@ -7,7 +7,9 @@ description: 物理で動くゲーム（落下・衝突・転がる・積む・�
 
 物理は Kit の lockfile にある **Rapier 0.21.0 の決定版**だけを使う（2D は `rapier2d-deterministic-compat`、3D は `rapier3d-deterministic-compat`）。
 **同じ入力なら、画面でも対戦サーバーでも同じ結果になる**（対戦サーバーも同じ版を持つ）。
-ほかの物理ライブラリ（matter.js / cannon-es / ammo.js / Jolt など）は入らない。自前で衝突判定を書くより Rapier を使う。
+ほかの物理ライブラリ（cannon-es / ammo.js / Jolt など）は入らない。自前で衝突判定を書くより Rapier を使う。
+**例外: 2D を同梱の Phaser 4 で作る 1 人用のゲーム**は、Phaser の Arcade（四角と円の当たり・重力）や Matter でもよい
+（`$game-phaser` §6）。**オンライン対戦のルールの物理は必ずこの Rapier**（Phaser の物理は端末ごとに結果が同じになる約束が無い）。
 
 **API の正本は `<kit>/sdk/app-sdk/spec.md` §9** と、Rapier の型（`<kit>/sdk/node_modules/@dimforge/rapier3d-deterministic-compat/dist/rapier.d.ts`）。先に読む。
 

@@ -36,6 +36,9 @@ resize()
 - `resize` は回転・全画面の切り替えでも来る。**大きさを起動時の 1 回だけで決めない。**
 - 全画面はゲームから出さない（`requestFullscreen()` を呼ばない）。Platform の枠の全画面ボタンが出す。
   **カメラ / マイクを使うゲームでは呼んでもブラウザに断られる**（使用中の表示を隠さないため、Platform が枠ごと全画面にする）。
+- **Phaser 4 は自前の `resize()` を書かず Scale Manager を使う**: 方式 A（§2）は `Phaser.Scale.FIT`、方式 B は
+  `Phaser.Scale.EXPAND`（どちらも `autoCenter: Phaser.Scale.CENTER_BOTH`、基準の大きさは縦 720×1280 / 横 1280×720 のように大きめ）。
+  `RESIZE` は画素が CSS の px と 1:1 になってスマホでぼけるので使わない。配置の決め直しは `this.scale.on('resize', …)`（`$game-phaser` §5）。
 - three.js は `renderer.setPixelRatio(Math.min(devicePixelRatio, 2))`、`renderer.setSize(w, h)`、
   `camera.aspect = w / h; camera.updateProjectionMatrix()`。
 - `manifest.json` の `orientation` は**実際に合う向き**を書く（`portrait` / `landscape` / `any`）。
@@ -112,6 +115,7 @@ async function shareResult(score: number) {
   let captureId: string | undefined
   try {
     // 描いた直後、同じ処理の中で呼ぶ（await を挟まない）。後で呼ぶと WebGL / WebGPU の画面は真っ黒になる
+    // Phaser は自分のループで描くので、game.events.once(Phaser.Core.Events.POST_RENDER, …) の中で呼ぶ（$game-phaser §7）
     ;({ captureId } = await app.share.capture(canvas))
   } catch (error) {
     console.warn('share.capture failed', error) // 撮れなくてもリンクだけで共有を続ける

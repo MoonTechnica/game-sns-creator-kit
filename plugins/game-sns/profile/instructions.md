@@ -20,6 +20,7 @@
 | `$game-controls` | **必ず**。PC（キーボード・マウス）とスマホ（画面の操作部・タップ・スワイプ）の両方で遊べる操作を作る。市販のコントローラー（ゲームパッド）はその上乗せで、対応度を `manifest.json` の `gamepad` に書く |
 | `$game-screen-layout` | **必ず**。どの画面の形でも崩れない画面・HUD・タイトル・ポーズ・リザルト。結果を人に見せたくなる遊びならリザルトに「共有」（`app.share.capture` / `app.ui.openShare`） |
 | `$game-asset-tools` | 絵や音を用意するとき（素材ツールがあるときは必ず） |
+| `$game-phaser` | **2D を同梱の Phaser 4 で作ると決めたとき**（§4.2。素材の読み込み・入力・画面・物理の Platform との継ぎ目） |
 | `$game-3d-and-bundles` | 3D で描くとき・ステージが複数あるとき・素材が大きいとき |
 | `$game-multiplayer` | オンライン対戦（2〜8 人）のとき（§1） |
 | `$game-leaderboard` | ランキング・順位・ハイスコア・タイムアタックが遊びにあるとき（`app.leaderboard`） |
@@ -36,7 +37,8 @@
 
 - **手元では利用者と話せる。** 遊びの説明の大事なところ（ソロか対戦か・操作・見た目）が本当に読み取れないときだけ
   短く聞く。細部は自分で決めて進め、§2 の出力まで完成させる。
-- **優先順位**: この文書と SDK の spec.md（出力の約束・禁止事項・API）> 利用者の遊びの説明 > Skill の既定。
+- **優先順位**: この文書と SDK の spec.md（出力の約束・禁止事項・API）> 利用者の遊びの説明 > Skill の既定 >
+  同梱ライブラリの公式の文書（`<kit>/sdk/node_modules/phaser/skills/` など。一般の Web 向けなので、Platform の Skill と食い違ったら Skill に従う）。
   利用者が操作や見た目を指定していれば Skill の既定より優先する（ただし PC とスマホの両方で遊べることは守る）。
 - Skill の規則に従ったせいで説明の要求を削った・変えたときは、`build-report.json` の `notes` に
   Skill 名・該当の規則・理由を 1 行で書く。
@@ -120,7 +122,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 | 外部 CDN の `<script>` / `<link>` / フォント / 画像 URL | `assets/` に同梱する |
 | `eval` / `new Function` / 文字列からのコード生成 | 素直に書く |
 | `__platform` への書き込み | 読むのも不要（`@workspace/app-sdk` を import する） |
-| 依存パッケージの追加（`npm install <名前>`・Kit に無いものを `package.json` に書く） | **Kit の lockfile にあるもの**（`<kit>/sdk/package.json`: three・`@types/three`・Rapier の決定版・`@colyseus/schema`）**だけを使える。追加は禁止**（版は Kit が固定し、検証器と対戦サーバーも同じ版を前提にする。足しても次のターンでは入らない）。参照は `file:/workspace/sdk/node_modules/<名前>`（`$game-3d-and-bundles` / `$game-physics`） |
+| 依存パッケージの追加（`npm install <名前>`・Kit に無いものを `package.json` に書く） | **Kit の lockfile にあるもの**（`<kit>/sdk/package.json`: three・`@types/three`・Phaser 4・Rapier の決定版・`@colyseus/schema`）**だけを使える。追加は禁止**（版は Kit が固定し、検証器と対戦サーバーも同じ版を前提にする。足しても次のターンでは入らない）。参照は `file:/workspace/sdk/node_modules/<名前>`（`$game-3d-and-bundles` / `$game-phaser` / `$game-physics`） |
 | `manifest.json` に宣言していない Capability の API | 使うものを `capabilities` に宣言する |
 
 `externalNetwork` は常に `false`。広告・解析・外部ログインは入れられない。生成 AI は外部の API を直接呼べず、
@@ -156,7 +158,8 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 2. `package.json` の依存は **ローカルパス参照**のまま変えない
    （`"@workspace/app-sdk": "file:/workspace/sdk/app-sdk"` のように、Sandbox 上の実パスへ向ける。
    手元では `file:<kit>/sdk/app-sdk` の絶対パスにする。§8）。
-   3D を描くなら `$game-3d-and-bundles` §2 のとおり `three` を足す。
+   使う道具（§4.2）に合わせて足す: 3D は `$game-3d-and-bundles` §2 の `three`、Phaser は `$game-phaser` §1 の `phaser`、
+   物理は `$game-physics` §1 の Rapier。
 3. バンドルは `@workspace/app-sdk/build-config` と `@workspace/app-server-sdk/build-config` を
    使う。SDK をバンドルに**含めない**ための設定なので、自前の設定に置き換えない。
    対戦では、画面（`src/main.ts`）が `server/main.ts` の定義を import して `app.space.join()` に渡す
@@ -165,10 +168,31 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
    `manifest.json` が仕様どおり）。
 5. `./outputs/` に 3 つのファイルを置く。
 
+### 4.2 道具を選ぶ（エンジン・描画・物理）
+
+Kit には描画と物理の道具が全部入っている。**どれを使うかは、作りたいゲームに合わせてゲームごとに選ぶ**（既定は無い）。
+
+| 道具 | 何か | 向くゲームの例 |
+|---|---|---|
+| **Phaser 4**（`$game-phaser`） | 2D のゲームエンジン。シーン・素材の読み込み・スプライトアニメ・トゥイーン・カメラ・タイルマップ・パーティクル・音・Arcade 物理 | 横スクロール・見下ろしのアクション・シューティング・タイルマップの RPG・動きの多い 2D パズル |
+| **three.js**（`$game-3d-and-bundles`） | 3D の描画（`three/webgpu`） | 3D の空間を動く・3D のカメラ・オープンワールド |
+| **Canvas 2D**（ブラウザ標準） | 描画の API だけ | ボタン 1 つの反射ゲーム・盤面だけのゲームなど、動く物が少なくエンジンの仕組みが要らないもの |
+| **Rapier 2D / 3D**（`$game-physics`） | 物理エンジン（決定版） | 3D の物理、オンライン対戦の物理 |
+
+1. **利用者が道具を指定していたら従う**（「Phaser で」「3D で」「ドット絵の 2D で」）。
+2. 指定が無ければ、**遊びの中身から選ぶ**: 2D か 3D か・動く物の数・スクロールやカメラ・タイルマップ／アニメーション／
+   パーティクルの量・物理の要否・オンライン対戦か。上の表は目安で、固定の対応ではない。
+3. **前の版を続けるときは、その版が使っている道具を続ける**（`./input/`。§4.0）。乗り換えるのは利用者が
+   求めたときだけ（ほぼ作り直しになる。`build-report.json` の `notes` に書く）。
+4. **組み合わせてよい**（three.js + Rapier 3D、Phaser + Rapier 2D）。ただし 1 つの canvas を 2 つのエンジンで描かない。
+   重さは足し算になる（Phaser 約 1.4 MB、Rapier 2D 約 3.3 MiB、3D 約 4.2 MiB。起動前に届く 20 MiB に数える）。
+5. 選んだ道具と理由を `build-report.json` の `notes` に 1 行書く。
+6. `manifest.json` の `renderer` を選んだ道具に合わせる: three.js は `"webgpu"`、Phaser は `"webgl"`、Canvas 2D は `"canvas2d"`。
+
 ## 5. 絵と音
 
 絵と音の用意は `$game-asset-tools` に従う（画像生成と素材ツール）。
-素材ツールが無いときは Canvas / three.js の描画と Web Audio の合成で作る。
+素材ツールが無いときは、選んだ道具（Canvas / Phaser / three.js）の描画と Web Audio の合成で作る。
 
 **利用者が用意した素材を先に使う。** `list_assets` の結果で `source: user` の素材は、利用者が上げたもの
 （画像・音・3D・動画）。指示に別の言及が無ければ、生成せずにそれを使う。`description` を読んで用途を判断する。

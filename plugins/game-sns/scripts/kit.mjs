@@ -23853,7 +23853,7 @@ var aiManifestSchema = exports_external.strictObject({
   instructionsKey: exports_external.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/, "must be a file name in ai/"),
   schema: exports_external.string().regex(/^ai\/schemas\/[A-Za-z0-9_-]{1,64}\.json$/, "must be a file in ai/schemas/").nullable().default(null)
 });
-var RENDERERS = ["webgpu", "webgl2", "canvas2d"];
+var RENDERERS = ["webgpu", "webgl2", "webgl", "canvas2d"];
 var rendererSchema = exports_external.enum(RENDERERS);
 var deviceFeatureSchema = exports_external.strictObject({
   purpose: exports_external.string().min(1).max(80).optional(),
@@ -24637,7 +24637,7 @@ var CODE_RULES = [
   },
   {
     code: "EVAL",
-    pattern: /\beval\s*\(|new\s+Function\s*\(/,
+    pattern: /\beval\s*\(|new\s+Function\s*\((?!\s*(['"])return this\1\s*\))/,
     severity: "error",
     why: "eval / new Function build code at runtime (the Shell's CSP forbids it too)"
   },
@@ -24678,6 +24678,7 @@ var CODE_RULES = [
     why: "a service worker would outlive the Launch and its capabilities"
   }
 ];
+var USES_PHASER = /["']Phaser v["']\s*\+|\bfrom\s*['"]phaser['"]|\brequire\s*\(\s*['"]phaser['"]\s*\)/;
 var SERVER_RULES = [
   {
     code: "SERVER_NODE_API",
@@ -24693,6 +24694,11 @@ var SERVER_RULES = [
     code: "SERVER_TIMERS",
     pattern: /(?<![.\w])set(?:Timeout|Interval)\s*\(/,
     why: "timers run outside the space: they keep firing after finish and escape the step budget; use tickRate / step and ctx.elapsedMs"
+  },
+  {
+    code: "SERVER_IMPORTS_PHASER",
+    pattern: USES_PHASER,
+    why: "Phaser is a screen-side engine and the space server has no DOM; keep the rules (and their physics: the bundled Rapier) free of Phaser"
   }
 ];
 var SERVER_ALLOWED_IMPORTS = new Set([
@@ -24816,10 +24822,12 @@ var DEVICE_USAGE = {
   camera: /\bdevice\s*\.\s*camera\b/,
   microphone: /\bdevice\s*\.\s*microphone\b/,
   motion: /\bdevice\s*\.\s*motion\b/,
-  pointerLock: /\brequestPointerLock\s*\(/
+  pointerLock: /(?<!\.webkitRequestPointerLock,[\w$]+\.)\brequestPointerLock\s*\(/
 };
 var USES_WEBGPU = /\bWebGPURenderer\b|['"]three\/webgpu['"]|\bnavigator\s*\.\s*gpu\b/;
 var USES_WEBGL = /\bWebGLRenderer\b|getContext\s*\(\s*['"](?:webgl2?|experimental-webgl)['"]/;
+var PHASER_LOADER_URL = /\.load\s*\.\s*(?:setBaseURL|setPath|script|scripts|multiatlas|pack|plugin|scenePlugin|sceneFile)\s*\(|\.load\s*\.\s*[A-Za-z]+\s*\(\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`|[\w$.]+)\s*,\s*['"`](?!data:)/;
+var PHASER_V3_API = /\.setPipeline\s*\(|\.(?:postFX|preFX)\b|\bBitmapMask\b|\bGeom\s*\.\s*Point\b|\bMath\s*\.\s*PI2\b|\bGenerateTexture\b/;
 function validateV2(manifest, files, options, errors3, warnings) {
   const declares = (capability) => manifest.capabilities.includes(capability);
   const sources = clientSources(manifest, files);
@@ -24937,11 +24945,25 @@ function validateV2(manifest, files, options, errors3, warnings) {
   }
   const webgpu = uses(USES_WEBGPU);
   const webgl = uses(USES_WEBGL);
-  const mismatch = manifest.renderer === "webgpu" && !webgpu || manifest.renderer === "webgl2" && webgpu || manifest.renderer === "canvas2d" && (webgpu || webgl);
+  const phaser = uses(USES_PHASER);
+  const mismatch = manifest.renderer === "webgpu" && !webgpu || manifest.renderer === "webgl2" && (webgpu || phaser) || manifest.renderer === "webgl" && (webgpu || !(phaser || webgl)) || manifest.renderer === "canvas2d" && (webgpu || webgl || phaser);
   if (mismatch) {
+    const found = phaser ? 'uses Phaser (declare "webgl")' : webgpu ? "uses WebGPURenderer (three/webgpu)" : webgl ? "uses WebGLRenderer" : "creates neither a WebGPURenderer (three/webgpu) nor a Phaser game";
     warnings.push({
       code: "RENDERER_MISMATCH",
-      message: `the manifest declares renderer "${manifest.renderer}" but the code ${webgpu ? "uses WebGPURenderer (three/webgpu)" : webgl ? "uses WebGLRenderer" : "never creates a WebGPURenderer (three/webgpu)"}`
+      message: `the manifest declares renderer "${manifest.renderer}" but the code ${found}`
+    });
+  }
+  if (phaser && uses(PHASER_LOADER_URL)) {
+    errors3.push({
+      code: "PHASER_LOADER_URL",
+      message: "pass the Phaser loader only URLs from app.assets.url(path) (e.g. this.load.image('hero', app.assets.url('assets/hero.png'))); setBaseURL / setPath / relative paths / external URLs / load.script / multiatlas / pack do not load inside the platform"
+    });
+  }
+  if (phaser && uses(PHASER_V3_API)) {
+    warnings.push({
+      code: "PHASER_V3_API",
+      message: "the code uses an API removed in Phaser 4 (setPipeline / postFX / preFX / BitmapMask / Geom.Point / Math.PI2 / GenerateTexture); see node_modules/phaser/skills/v3-to-v4-migration/SKILL.md"
     });
   }
   if (ai === null)
