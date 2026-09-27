@@ -279,7 +279,7 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
    （`node -e "console.log(crypto.randomUUID())"`。同じ送信のやり直しには同じ値を使う）。
 6. **結果**: `ready` かつ `landed: true` なら、**制作画面をブラウザで開く**:
    `kit.mjs open --url <editor_url>`（この会話で最初に `ready` になったときだけ。制作画面は開いたままでも新しい版が届くので、
-   2 回目以降は開かない。開けない環境では `opened: false` が返るだけで失敗ではない）。開けたかどうかに関わらず、
+   2 回目以降は開かない。開けない環境では `opened: false` が返るだけで失敗ではない。`open` がエラーで終わっても止まらない）。開けたかどうかに関わらず、
    **`editor_url` を返事の最後に目立つ形で毎回示す**（例: 「▶ 制作画面で試遊する: <editor_url>」）。そのあと `.game-sns.json` の
    `base_revision_id` を `kit.mjs pull` で新しい版に揃える。`failed` なら `validation[].report_url` を取得して読み、直して 3. から。
    `ready` でも `landed: false` なら、先に別の版が着地している（下の `REVISION_CONFLICT` と同じ扱い）。

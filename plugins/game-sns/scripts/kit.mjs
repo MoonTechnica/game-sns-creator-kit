@@ -40000,6 +40000,8 @@ function agentsMd(kitRoot) {
     "  **`node <kit>/scripts/kit.mjs open --url <editor_url>` でブラウザに開く**（この会話で最初に `ready` になったときだけ。",
     "  制作画面は開いたままでも新しい版が届くので、2 回目以降は開かない）。",
     "- 開けたかどうかに関わらず、**制作画面のリンク（`editor_url`）を毎回、返事の最後に目立つ形で示す**。",
+    "  `kit.mjs open` が開けなかった（`opened: false`）ときも、エラーで終わっても（古い Kit に `open` が無い・URL が断られた）、",
+    "  そこで止まらず**リンクだけは必ず示す**（例: 「▶ 制作画面で試遊する: <editor_url>」）。",
     ""
   ].join(`
 `);
@@ -40167,7 +40169,12 @@ async function openEditor(context, flags) {
       throw new CommandError(error51.message);
     throw error51;
   }
-  print(context, { opened: await context.openUrl(url2), url: url2 });
+  const opened = await context.openUrl(url2);
+  print(context, opened ? { opened, url: url2 } : {
+    opened,
+    url: url2,
+    next: "show this url to the creator as a link (the browser could not be opened)"
+  });
 }
 async function readConfig(workdir) {
   return parseConfig(await readFile3(join5(workdir, CONFIG_FILE), "utf8"));
