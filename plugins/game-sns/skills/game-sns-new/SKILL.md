@@ -1,6 +1,6 @@
 ---
 name: game-sns-new
-description: game-sns のミニゲームを手元の Coding Agent で新しく作り始める。Platform MCP（platform-creator）で App を作り、Creator Kit の SDK を用意し、作業ディレクトリ（.game-sns.json・source/）を作る。「新しいゲームを作って」「game-sns で〜を作りたい」のように、まだ Platform に無いゲームを作るときに使う。new game, create app, setup.
+description: game-sns のミニゲームを手元の Coding Agent で新しく作り始める。Platform MCP（game-sns）で App を作り、Creator Kit の SDK を用意し、作業ディレクトリ（.game-sns.json・source/）を作る。「新しいゲームを作って」「game-sns で〜を作りたい」のように、まだ Platform に無いゲームを作るときに使う。new game, create app, setup.
 ---
 
 # 新しいゲームを作り始める

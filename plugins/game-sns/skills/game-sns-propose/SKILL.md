@@ -1,6 +1,6 @@
 ---
 name: game-sns-propose
-description: リミックスした game-sns のゲーム（fork）の変更を本流（リミックス元）へ提案する（GitHub の Pull Request）。提案への返事・直し・取り下げも行う。Platform MCP（platform-creator）の get_app / open_proposal / get_proposal / comment_proposal / update_proposal / close_proposal を使う。「本流に提案して」「作者に送って」「PR を出して」「提案のコメントに返事して」のときに使う。propose, pull request, contribute.
+description: リミックスした game-sns のゲーム（fork）の変更を本流（リミックス元）へ提案する（GitHub の Pull Request）。提案への返事・直し・取り下げも行う。Platform MCP（game-sns）の get_app / open_proposal / get_proposal / comment_proposal / update_proposal / close_proposal を使う。「本流に提案して」「作者に送って」「PR を出して」「提案のコメントに返事して」のときに使う。propose, pull request, contribute.
 ---
 
 # 本流へ提案する

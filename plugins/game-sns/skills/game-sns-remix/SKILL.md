@@ -1,6 +1,6 @@
 ---
 name: game-sns-remix
-description: 他の人が公開した game-sns のゲームをリミックスして（GitHub の fork）、自分の派生を手元で作り始める。Platform MCP（platform-creator）の resolve_app / remix / download_source と Creator Kit の CLI（init / pull）を使う。ゲームのページの URL（/g/…・/p/…）を渡されて「これを改造して」「リミックスして」「fork して」と言われたとき、他人のゲームを直して本流へ提案したいときに使う。remix, fork, derive.
+description: 他の人が公開した game-sns のゲームをリミックスして（GitHub の fork）、自分の派生を手元で作り始める。Platform MCP（game-sns）の resolve_app / remix / download_source と Creator Kit の CLI（init / pull）を使う。ゲームのページの URL（/g/…・/p/…）を渡されて「これを改造して」「リミックスして」「fork して」と言われたとき、他人のゲームを直して本流へ提案したいときに使う。remix, fork, derive.
 ---
 
 # リミックスして作り始める

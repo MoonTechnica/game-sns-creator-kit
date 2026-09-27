@@ -1,6 +1,6 @@
 ---
 name: game-sns-pull
-description: Platform にある game-sns のゲームを手元に取り込む（続きを作る・制作画面で進んだ版を取り込む・リミックス元の本流の新しい公開版を取り込む）。Platform MCP（platform-creator）の get_app / download_source / get_merge_inputs と Creator Kit の CLI（pull / merge-inputs）を使う。app_id や制作画面の URL を渡されたとき、「続きを作って」「最新にして」「本流を取り込んで」のときに使う。pull, sync, continue, upstream.
+description: Platform にある game-sns のゲームを手元に取り込む（続きを作る・制作画面で進んだ版を取り込む・リミックス元の本流の新しい公開版を取り込む）。Platform MCP（game-sns）の get_app / download_source / get_merge_inputs と Creator Kit の CLI（pull / merge-inputs）を使う。app_id や制作画面の URL を渡されたとき、「続きを作って」「最新にして」「本流を取り込んで」のときに使う。pull, sync, continue, upstream.
 ---
 
 # 手元に取り込む

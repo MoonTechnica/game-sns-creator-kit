@@ -1,6 +1,6 @@
 ---
 name: game-sns-push
-description: 手元で作った game-sns のゲームを Platform に送る。Creator Kit の CLI で outputs/ の 3 点（source.zip・dist.tar.gz・build-report.json）を作って検査し、Platform MCP（platform-creator）の begin_build → アップロード → submit_build → get_build で下書きにする。「送って」「push して」「Platform に上げて」「試遊できるようにして」のときに使う。push, submit, upload, build.
+description: 手元で作った game-sns のゲームを Platform に送る。Creator Kit の CLI で outputs/ の 3 点（source.zip・dist.tar.gz・build-report.json）を作って検査し、Platform MCP（game-sns）の begin_build → アップロード → submit_build → get_build で下書きにする。「送って」「push して」「Platform に上げて」「試遊できるようにして」のときに使う。push, submit, upload, build.
 ---
 
 # Platform に送る

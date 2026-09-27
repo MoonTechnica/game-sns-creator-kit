@@ -196,7 +196,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 ## 8. 手元で作るとき（Creator Kit）
 
-手元の Coding Agent は Platform MCP **`platform-creator`** とこの Kit の CLI（`node <kit>/scripts/kit.mjs <command>`）で
+手元の Coding Agent は Platform MCP **`game-sns`** とこの Kit の CLI（`node <kit>/scripts/kit.mjs <command>`）で
 Platform とやり取りする。**CLI は作業ディレクトリ（`.game-sns.json` のあるところ）で実行する。**
 MCP のツールが返す URL は署名付きで短命なので、受け取ったらすぐ CLI に渡す（保存しない・会話に貼らない）。
 
@@ -213,7 +213,7 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 
 ### 8.2 素材ツール
 
-`$game-asset-tools` のツールは `platform-creator` の同名のツールで、**どれも `app_id`（`.game-sns.json`）を渡す**。
+`$game-asset-tools` のツールは `game-sns` の同名のツールで、**どれも `app_id`（`.game-sns.json`）を渡す**。
 手元には内蔵の画像生成が無いので、画像は `generate_image` で作る。
 
 ### 8.3 取得 → 作る → 検査 → 送信

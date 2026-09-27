@@ -1,7 +1,7 @@
 # game-sns Creator Kit
 
 game-sns のミニゲームを、**手元の Coding Agent（Claude Code / Codex など）で作る**ための Kit です。
-Platform の生成 Agent と**同じ Skills・指示書・SDK**を使い、Platform MCP（`platform-creator`）で
+Platform の生成 Agent と**同じ Skills・指示書・SDK**を使い、Platform MCP（`game-sns`）で
 ゲームの取得・送信・素材の生成を行います。送った版は制作画面で試遊・公開できます。
 
 > このリポジトリは game-sns の本体リポジトリから CI が生成しています。**直接編集しないでください**
@@ -17,7 +17,7 @@ Platform の生成 Agent と**同じ Skills・指示書・SDK**を使い、Platf
 ```text
 /plugin marketplace add moontechnica/game-sns-creator-kit
 /plugin install game-sns@game-sns
-/mcp            # plugin:game-sns:platform-creator を選んでログイン（ブラウザで承認）
+/mcp            # plugin:game-sns:game-sns を選んでログイン（ブラウザで承認）
 ```
 
 使い方: `/game-sns:new 星を集めるジャンプゲーム` / `/game-sns:pull <app_id>` / `/game-sns:check` / `/game-sns:push 操作説明を足した`。
@@ -29,9 +29,12 @@ Platform の生成 Agent と**同じ Skills・指示書・SDK**を使い、Platf
 
 ```text
 codex plugin marketplace add moontechnica/game-sns-creator-kit
-# Codex で /plugins → game-sns をインストールし、新しいセッションを始める
-codex mcp login platform-creator
+codex plugin add game-sns@game-sns
+codex mcp login game-sns
+# Codex で新しいセッションを始める
 ```
+
+Codex の中の `/plugins` からも入れられます。更新は `codex plugin marketplace upgrade game-sns`。
 
 送信前の検査の hook は、`/hooks` で信頼するまで動きません（信頼しなくても `game-sns-push` の手順で検査します）。
 Skills は `$game-sns-new` / `$game-sns-pull` / `$game-sns-push` / `$game-sns-remix` / `$game-sns-propose` / `$game-sns-proposals` で呼べます。
@@ -40,19 +43,19 @@ Skills は `$game-sns-new` / `$game-sns-pull` / `$game-sns-push` / `$game-sns-re
 `~/.codex/config.toml` に次を足します（`node <kit>/scripts/kit.mjs codex-config` でも同じものが出ます）:
 
 ```toml
-[plugins."game-sns@game-sns".mcp_servers.platform-creator]
+[plugins."game-sns@game-sns".mcp_servers.game-sns]
 default_tools_approval_mode = "writes"
 
-[plugins."game-sns@game-sns".mcp_servers.platform-creator.tools.open_proposal]
+[plugins."game-sns@game-sns".mcp_servers.game-sns.tools.open_proposal]
 approval_mode = "approve"
 
-[plugins."game-sns@game-sns".mcp_servers.platform-creator.tools.close_proposal]
+[plugins."game-sns@game-sns".mcp_servers.game-sns.tools.close_proposal]
 approval_mode = "approve"
 
-[plugins."game-sns@game-sns".mcp_servers.platform-creator.tools.comment_proposal]
+[plugins."game-sns@game-sns".mcp_servers.game-sns.tools.comment_proposal]
 approval_mode = "approve"
 
-[plugins."game-sns@game-sns".mcp_servers.platform-creator.tools.merge_proposal]
+[plugins."game-sns@game-sns".mcp_servers.game-sns.tools.merge_proposal]
 approval_mode = "approve"
 ```
 

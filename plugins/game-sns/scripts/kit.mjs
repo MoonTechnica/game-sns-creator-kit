@@ -40257,7 +40257,7 @@ async function review(context, flags) {
 `);
   print(context, { dir, ...changes });
 }
-var MCP_SERVER_NAME = "platform-creator";
+var MCP_SERVER_NAME = "game-sns";
 function codexConfig(context) {
   context.stdout(codexApprovalToml(`${KIT_PLUGIN_NAME}@${KIT_PLUGIN_NAME}`, MCP_SERVER_NAME));
 }

@@ -1,6 +1,6 @@
 ---
 name: game-sns-proposals
-description: 自分の game-sns のゲーム（本流）に届いた提案（派生からの Pull Request）を読み、コメントし、マージするか見送る。Platform MCP（platform-creator）の list_proposals / get_proposal / get_proposal_inputs / comment_proposal / merge_proposal / close_proposal と Creator Kit の CLI（review）を使う。「届いた提案を見て」「PR をレビューして」「マージして」のときに使う。review, merge, maintainer.
+description: 自分の game-sns のゲーム（本流）に届いた提案（派生からの Pull Request）を読み、コメントし、マージするか見送る。Platform MCP（game-sns）の list_proposals / get_proposal / get_proposal_inputs / comment_proposal / merge_proposal / close_proposal と Creator Kit の CLI（review）を使う。「届いた提案を見て」「PR をレビューして」「マージして」のときに使う。review, merge, maintainer.
 ---
 
 # 届いた提案を読んで決める

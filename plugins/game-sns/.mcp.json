@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "platform-creator": {
+    "game-sns": {
       "type": "http",
       "url": "${GAME_SNS_MCP_URL:-https://game-sns-seven.vercel.app/mcp/creator}",
       "oauth": { "callbackPort": 43125 }
