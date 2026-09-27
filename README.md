@@ -74,4 +74,11 @@ Claude Code では環境変数 `GAME_SNS_MCP_URL` で MCP の URL を差し替�
 
 ## ライセンス
 
-**未定です**（決まるまで、このリポジトリの内容の再配布・改変はご遠慮ください）。同梱の three.js（`sdk/` に展開される）は MIT です。
+このリポジトリの内容は **MIT No Attribution（MIT-0）** です（[`LICENSE`](LICENSE)）。
+Skills のサンプルコードなど、Kit の内容をあなたのゲームへコピーしても著作権表示は要りません。
+
+- `plugins/game-sns/scripts/kit.mjs` に同梱している npm パッケージは、それぞれのライセンスに従います
+  （[`plugins/game-sns/THIRD_PARTY_NOTICES.md`](plugins/game-sns/THIRD_PARTY_NOTICES.md)）。
+- `sdk/` に展開される SDK は Platform から取得するもので、このリポジトリのライセンスの対象外です
+  （同梱の three.js は MIT）。
+- 「game-sns」の名称・ロゴの使用は許諾していません。
