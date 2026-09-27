@@ -24620,6 +24620,7 @@ var ALLOWED_EXTENSIONS = new Set([
   ".mp3",
   ".ogg",
   ".wav",
+  ".mp4",
   ".glb",
   ".ktx2",
   ".woff",

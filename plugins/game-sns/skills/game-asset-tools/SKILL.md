@@ -17,7 +17,8 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 
 ## 1. 最初にやること（ツールを呼ぶ前に）
 
-1. **`list_assets` を呼ぶ。** 前のターン（リミックス元を含む）で作った素材が残っている。**作り直さずに使う**。
+1. **`list_assets` を呼ぶ。** 前のターン（リミックス元を含む）で作った素材と、利用者が上げた素材
+   （`source: user`）が並ぶ。**作り直さずに使う**。利用者の素材は§9 のとおり最優先。`kind` で種類を絞れる。
    足りない物だけを用意する。
 2. **足りない物は、まず `search_stock_assets` で探す**（§3.5）。キャラの歩き・ジャンプの連番、タイル、UI、
    アニメ付きの 3D キャラ、効果音・ジングルは既存の素材で揃うことが多い。費用はかからず、
@@ -53,7 +54,8 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 ## 3. 透過キャラクターの手順（内蔵の画像生成のとき）
 
 1. 内蔵の画像生成で、キャラクターを**単色の背景**（白か緑）で 1 枚作る。全身が枠に収まり、影を落とさない構図で。
-2. `upload_image(name)` を呼び、返った `upload_url` へアップロードする:
+2. `upload_image(name, description)` を呼び、返った `upload_url` へアップロードする（`description` に
+   「主人公の立ち絵・右向き」のように何の画像かを書く。次のターンの `list_assets` で手掛かりになる）:
    `curl -fsS -X PUT -F 'file=@/workspace/generated_images/<ファイル名>.png;type=image/png' '<upload_url>'`
 3. **アップロードが終わってから**、その `asset_id` で `remove_background` を呼ぶ
    （先に呼ぶと `ASSET_NOT_READY`）。
@@ -151,3 +153,39 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 
 - 画像の枠を 1 回使う（費用はかからない）。WebP の素材は変換できない。
 - 2D のスプライト・UI の画像は PNG / WebP のままでよい（`<img>` や Canvas で描くもの）。
+
+## 9. 利用者の素材（`source: user`）と「添付された素材」
+
+利用者は自分の画像・音・3D・動画を素材として上げられる。`list_assets` / `get_asset` の結果の
+`source` が `user` の素材がそれで、`description` は利用者の覚え書き（用途の手掛かり）。
+発話に素材を添付すると、メッセージの後ろに「添付された素材」の一覧（`asset_id`・名前・種類・大きさ・寸法・長さ・説明）が付き、
+**画像はそのまま、動画は等間隔 6 コマのコマ割り画像**（左上から右へ、上段から下段へ時刻順。各コマの左下に時刻）として
+同じメッセージに添えられる。一覧に URL は無い。ファイルが要るときは `get_asset(asset_id)` で取る。
+
+- **利用者の素材を最優先で使う。** 指示に別の言及が無ければ、同じ物を生成しない。
+- **使い方は発話の指示に従う。**
+
+  | 発話の指示 | すること |
+  |---|---|
+  | ゲームの中で使う・表示する・流す（「この画像を主人公に」「この動画をオープニングで流して」） | `get_asset` で取得して同梱する（§4）。画像は§2 のとおり縮小して `assets/` に、音・3D は§2 の置き方で |
+  | 参考・雰囲気・「こういう動きで」「この感じの絵柄で」 | 添えられた画像（動画はコマ割り）を見て、絵柄・色・動き・間を真似て作る。**ファイルは同梱しない** |
+  | 何も言っていない | 画像・音・3D はゲームで使う。**動画は参考として扱う**（同梱しない） |
+
+- **動画をゲームで流すとき**: `get_asset` の `download_url` を `bundles/<名前>/<name>.mp4` に取得し、
+  `manifest.json` の `bundles` に `<名前>` を宣言する（初期ダウンロードの 20 MiB に入れない。`$game-3d-and-bundles`）。
+  `app.bundles.load('<名前>')` の後、`app.assets.url()` が返す URL（Host が渡す blob URL）を `<video>` に渡す:
+
+  ```js
+  await app.bundles.load('intro')
+  const video = document.createElement('video')
+  video.src = app.assets.url('bundles/intro/opening.mp4')
+  video.playsInline = true
+  video.muted = true // 自動で流すなら muted が要る。音を出すのは最初の操作の後（`$game-controls` §3）
+  await video.play()
+  // 描画に使うなら毎フレーム ctx.drawImage(video, …) / three.js は new THREE.VideoTexture(video)
+  // 終わったら video.pause(); video.removeAttribute('src'); app.bundles.unload('intro')
+  ```
+
+  結果の `duration_ms` と `width` / `height` で長さと縦横比が分かる（読み込み前に枠を決められる）。
+- 利用者が上げられる形式: 画像 PNG / JPEG / WebP（4 MiB）、音 MP3（8 MiB）、3D GLB（8 MiB）、動画 MP4（H.264・3 分・30 MiB）。
+- 利用者の素材は予算を使わない（`get_asset` は何度呼んでもよい）。
