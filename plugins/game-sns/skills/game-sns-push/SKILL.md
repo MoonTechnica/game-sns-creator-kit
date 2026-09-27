@@ -13,5 +13,7 @@ description: 手元で作った game-sns のゲームを Platform に送る。Cr
 3. `node <kit>/scripts/kit.mjs check` が通るまで直す（`pack` からやり直す）。
 4. `begin_build`（`message` は利用者向けの 1 行、`request_key` は新しい UUID。`merge_theirs_revision_id` は null なら渡さない）
    → `kit.mjs upload --urls '<upload_urls の JSON>'` → `submit_build` → `get_build` を 3 秒ごとに終わるまで。
-5. `ready` なら `editor_url` を利用者に伝える（手元で遊ぶ仕組みは無い。試遊は制作画面）。
+5. `ready` なら **`node <kit>/scripts/kit.mjs open --url <editor_url>` で制作画面をブラウザに開く**（この会話で最初の `ready` のときだけ。
+   開けない環境では `opened: false` になるだけ）。開けたかどうかに関わらず、**`editor_url` を返事の最後に目立つ形で毎回示す**
+   （手元で遊ぶ仕組みは無い。試遊は制作画面）。
    `REVISION_CONFLICT` は §8.4、ほかのエラーは §8.5。公開・投稿は制作画面で利用者が行う。

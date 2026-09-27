@@ -9355,6 +9355,7 @@ var COMMANDS = {
     optional: ["base-sha256"],
     switches: []
   },
+  open: { required: ["url"], optional: [], switches: [] },
   "codex-config": { required: [], optional: [], switches: [] }
 };
 var USAGE = `usage: node <kit>/scripts/kit.mjs <command> [--flag value]…
@@ -9403,6 +9404,55 @@ import { createHash as createHash3 } from "node:crypto";
 import { existsSync as existsSync3 } from "node:fs";
 import { cp, mkdir as mkdir2, readdir as readdir3, readFile as readFile3, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
 import { dirname as dirname3, join as join5 } from "node:path";
+
+// frontend/packages/creator-kit/src/browser.ts
+import { spawn } from "node:child_process";
+
+class EditorUrlError extends Error {
+  name = "EditorUrlError";
+}
+var LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+function assertEditorUrl(url, appId) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new EditorUrlError(`not an editor URL (cannot parse): ${url}`);
+  }
+  const local = parsed.protocol === "http:" && LOCAL_HOSTS.has(parsed.hostname);
+  if (parsed.protocol !== "https:" && !local) {
+    throw new EditorUrlError(`not an editor URL (https only, except localhost): ${url}`);
+  }
+  if (parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "") {
+    throw new EditorUrlError(`not an editor URL (no credentials, query or fragment): ${url}`);
+  }
+  if (parsed.pathname !== `/create/${appId}`) {
+    throw new EditorUrlError(`not the editor of this App (${appId}); pass the editor_url that get_build returned: ${url}`);
+  }
+  return parsed.href;
+}
+var OPEN_WAIT_MS = 5000;
+function openInBrowser(url) {
+  const [command, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: "ignore", detached: true });
+    const timer = setTimeout(() => {
+      child.unref();
+      resolve(true);
+    }, OPEN_WAIT_MS);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      console.error(`kit.mjs open: could not start ${command}: ${error.message}`);
+      resolve(false);
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      if (code !== 0)
+        console.error(`kit.mjs open: ${command} exited with ${code}`);
+      resolve(code === 0);
+    });
+  });
+}
 
 // frontend/node_modules/zod/v4/classic/external.js
 var exports_external = {};
@@ -39925,12 +39975,31 @@ function agentsMd(kitRoot) {
   return [
     "# game-sns のゲーム制作（Creator Kit）",
     "",
-    "このディレクトリは game-sns のゲームを 1 本作る作業場所です。",
+    "このディレクトリは、**game-sns（AI でミニゲームを作って遊ぶ SNS）で遊べるゲームを 1 本作り、Platform に送る**ための作業場所です。",
+    "ここでの仕事はゲームを作ることだけです。",
+    "",
+    "## 目的と範囲",
+    "",
+    "- 作るのは **game-sns で遊べるゲーム**だけ。ゲーム以外（ツール・Web サイト・一般のアプリ・ライブラリ）は作らない。",
+    "  ゲーム以外を頼まれたら、「ここは game-sns のゲームを作る場所です」と伝え、その依頼をゲームの形にした案を出す（断るだけにしない）。",
+    "- 作業ディレクトリの外のファイルは触らない。ほかのホスティングへのデプロイ・外部サービスや依存パッケージの追加もしない",
+    "  （ゲームは Platform の中だけで動く。使える API とライブラリは `<kit>/profile/instructions.md` と SDK の spec.md にあるものだけ）。",
+    "- 公開・投稿・削除・クレジット・チームの操作は利用者がアプリで行う（ここからはできない）。",
+    "",
+    "## 進め方",
     "",
     `- \`<kit>\`（Creator Kit の置き場）は \`${kitRoot}\`（\`.game-sns.json\` の \`kit_root\`）。`,
     `- **最初に \`${kitRoot}/profile/instructions.md\` を読み、それに従う**（手元での進め方は同 §8）。`,
     "- `$game-controls` と `$game-screen-layout` は必ず使う。",
     "- `.game-sns.json` は手で書き換えない（`node <kit>/scripts/kit.mjs` が書く）。",
+    "",
+    "## 動作の確認はアプリのプレビューで",
+    "",
+    "- 手元ではゲームを遊べない（dev サーバは無い）。送った版はアプリの制作画面で試遊する。",
+    "- push（`$game-sns-push`）が `ready` になったら、`get_build` が返した `editor_url` を",
+    "  **`node <kit>/scripts/kit.mjs open --url <editor_url>` でブラウザに開く**（この会話で最初に `ready` になったときだけ。",
+    "  制作画面は開いたままでも新しい版が届くので、2 回目以降は開かない）。",
+    "- 開けたかどうかに関わらず、**制作画面のリンク（`editor_url`）を毎回、返事の最後に目立つ形で示す**。",
     ""
   ].join(`
 `);
@@ -39953,7 +40022,8 @@ function defaultContext(cwd, kitRoot) {
     download: (url2) => download(url2),
     fetch: (url2, init) => globalThis.fetch(url2, init),
     stdout: (line) => process.stdout.write(`${line}
-`)
+`),
+    openUrl: openInBrowser
   };
 }
 async function runCommand(args, context) {
@@ -39977,6 +40047,8 @@ async function runCommand(args, context) {
       return link(context);
     case "review":
       return review(context, flags);
+    case "open":
+      return openEditor(context, flags);
     case "codex-config":
       return codexConfig(context);
   }
@@ -40084,6 +40156,18 @@ async function link(context) {
   });
   await writeAgentFiles(workdir, context.kitRoot);
   print(context, { kit_root: context.kitRoot });
+}
+async function openEditor(context, flags) {
+  const config2 = await readConfig(await findWorkdir(context.cwd));
+  let url2;
+  try {
+    url2 = assertEditorUrl(flags.url, config2.app_id);
+  } catch (error51) {
+    if (error51 instanceof EditorUrlError)
+      throw new CommandError(error51.message);
+    throw error51;
+  }
+  print(context, { opened: await context.openUrl(url2), url: url2 });
 }
 async function readConfig(workdir) {
   return parseConfig(await readFile3(join5(workdir, CONFIG_FILE), "utf8"));

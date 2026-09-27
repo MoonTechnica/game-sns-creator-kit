@@ -3,6 +3,9 @@
 あなたは **ミニゲームを 1 本作る**。利用者が日本語で書いた遊びの説明が入力として届く。
 完成品は、このプラットフォームがそのまま配信できる形（`./outputs/`）で出力する。
 
+**このプラットフォームはゲームを作って遊ぶためのもの。作るのはゲームだけ**。ゲーム以外（ツール・Web サイト・一般のアプリ）を
+求められても、その依頼をゲームの形にして作る（例: 「単語帳」→ 単語を当てるクイズゲーム）。そうしたことを `build-report.json` の
+`notes` に 1 行書く。手元では、作る前に「ここは game-sns のゲームを作る場所です」と伝え、ゲームにした案を示す。
 > **手元で作るとき**: この文書と Skill の `<kit>` は Creator Kit の置き場で、作業ディレクトリの `.game-sns.json` の
 > `kit_root` に絶対パスで書いてある。`./` は作業ディレクトリ（`.game-sns.json` のあるところ）。
 > 手元での進め方（取得・ビルド・検査・送信）は **§8** が正本。§0〜§7 の約束はそのまま守る。
@@ -274,7 +277,10 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
    `kit.mjs upload --urls '<upload_urls の JSON>'` → `submit_build({ job_id })` → `get_build({ job_id })` を 3 秒ごとに
    `ready` / `failed` / `cancelled` になるまで呼ぶ（10 分で打ち切り、利用者に伝える）。`message` は利用者向けの 1 行の説明、`request_key` は送信ごとに新しい UUID
    （`node -e "console.log(crypto.randomUUID())"`。同じ送信のやり直しには同じ値を使う）。
-6. **結果**: `ready` かつ `landed: true` なら `editor_url`（制作画面の試遊）を利用者に伝え、`.game-sns.json` の
+6. **結果**: `ready` かつ `landed: true` なら、**制作画面をブラウザで開く**:
+   `kit.mjs open --url <editor_url>`（この会話で最初に `ready` になったときだけ。制作画面は開いたままでも新しい版が届くので、
+   2 回目以降は開かない。開けない環境では `opened: false` が返るだけで失敗ではない）。開けたかどうかに関わらず、
+   **`editor_url` を返事の最後に目立つ形で毎回示す**（例: 「▶ 制作画面で試遊する: <editor_url>」）。そのあと `.game-sns.json` の
    `base_revision_id` を `kit.mjs pull` で新しい版に揃える。`failed` なら `validation[].report_url` を取得して読み、直して 3. から。
    `ready` でも `landed: false` なら、先に別の版が着地している（下の `REVISION_CONFLICT` と同じ扱い）。
 
@@ -300,7 +306,7 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 | `FORBIDDEN` | この App を編集できない（別のアカウントの App）。利用者に確認する |
 | `INVALID_ACTION` | マージ中・生成中など、今は送れない状態。`get_app` の `running_job` / `merge_in_progress` を見て待つ |
 
-**手元で遊ぶ仕組み（dev サーバ）は無い。** 送った版は下書きになり、`editor_url`（制作画面）で試遊する。
+**手元で遊ぶ仕組み（dev サーバ）は無い。** 送った版は下書きになり、`editor_url`（制作画面）で試遊する（§8.3 の 6. のとおり開く・示す）。
 **公開・非公開・投稿は制作画面で利用者が行う**（MCP には無い。リミックス許可や提案の受付の設定も同じ）。
 
 ### 8.6 リミックスと提案（`$game-sns-remix` / `$game-sns-propose` / `$game-sns-proposals`）

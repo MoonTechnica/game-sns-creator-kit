@@ -1,5 +1,5 @@
 ---
-description: 手元で作ったゲームを検査して Platform に送る（下書きになり、制作画面で試遊できる）
+description: 手元で作ったゲームを検査して Platform に送る（下書きになり、制作画面をブラウザで開いて試遊できる）
 argument-hint: "[変更の説明]"
 ---
 
