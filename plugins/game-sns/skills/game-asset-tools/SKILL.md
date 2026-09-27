@@ -1,6 +1,6 @@
 ---
 name: game-asset-tools
-description: ゲームの絵と音を用意する。画像の作り方（内蔵の画像生成、無い環境では generate_image）と、素材ツール（MCP。generate_image / upload_image / remove_background / convert_texture / generate_sound_effect / generate_music / generate_model_3d / upload_asset / list_assets / get_asset）の使い方、予算の配分、透過キャラクター・効果音・BGM の手順、失敗したときの対処を扱う。画像・キャラクター・背景・効果音・BGM・3D モデルを作るとき、または素材ツールが使えるときに使う。assets, sprites, sound effects, music, MCP tools, budget.
+description: ゲームの絵と音を用意する。無料で使える既存素材（CC0。search_stock_assets / import_stock_asset）の探し方と取り込み方、画像の作り方（内蔵の画像生成、無い環境では generate_image）と、素材ツール（MCP。generate_image / upload_image / remove_background / convert_texture / generate_sound_effect / generate_music / generate_model_3d / upload_asset / list_assets / get_asset）の使い方、予算の配分、透過キャラクター・歩きなどの連番アニメ・アニメ付き 3D・効果音・BGM の手順、失敗したときの対処を扱う。画像・キャラクター・背景・モーション・効果音・BGM・3D モデルを用意するとき、または素材ツールが使えるときに使う。assets, sprites, animation frames, stock assets, CC0, sound effects, music, MCP tools, budget.
 ---
 
 # 絵と音の用意（画像生成 + 素材ツール）
@@ -12,14 +12,17 @@ description: ゲームの絵と音を用意する。画像の作り方（内蔵�
 | **内蔵の画像生成がある** | 内蔵の画像生成で作る。**背景を透過できず、大きさの指定も効かない**（常に 1254px 四方前後・1〜2 MB）。画像の枠を使わない | `/workspace/generated_images/` に保存される |
 | **内蔵の画像生成が無い**（手元のエージェントなど） | 素材ツール `generate_image(name, prompt, size, transparent)` で作る。透過は `transparent=true` で 1 回で済む。画像の枠を 1 回使う | 結果の `download_url` から取得する（§4） |
 
-透過・3D・音は素材ツール（MCP）で作る。
+透過・3D・音は素材ツール（MCP）で作る。**作る前に、無料で使える既存素材（CC0）を探す**（§3.5）。
 **ツール一覧に素材ツール（`list_assets` など）が無いとき**は、絵は Canvas（three.js）で描き、音は Web Audio で合成する。
 
 ## 1. 最初にやること（ツールを呼ぶ前に）
 
 1. **`list_assets` を呼ぶ。** 前のターン（リミックス元を含む）で作った素材が残っている。**作り直さずに使う**。
-   足りない物だけを作る。
-2. **何を作るかを先に決めて、予算に収める**。結果の `budget` に残りが出る。目安（1 本のゲーム）:
+   足りない物だけを用意する。
+2. **足りない物は、まず `search_stock_assets` で探す**（§3.5）。キャラの歩き・ジャンプの連番、タイル、UI、
+   アニメ付きの 3D キャラ、効果音・ジングルは既存の素材で揃うことが多い。費用はかからず、
+   予算の `stock` 枠（生成の枠とは別）だけを使う。**絵柄をそろえたいときは同じパック（`pack`）から取る**。
+3. **見つからない物だけを作る。何を作るかを先に決めて、予算に収める**。結果の `budget` に残りが出る。目安（1 本のゲーム）:
 
    | 種類 | 使う枠 | 目安 |
    |---|---|---|
@@ -29,7 +32,7 @@ description: ゲームの絵と音を用意する。画像の作り方（内蔵�
    | BGM | 音の枠を 1 回（1 分単位で課金） | 1 本（30 秒前後をループ） |
    | 3D モデル | 3D の枠（**ツール一覧に `generate_model_3d` があるときだけ**） | 主役 1〜2 体 |
 
-3. **図形・文字・ボタン・パーティクル・弾・床のタイルは生成しない。** Canvas で描く方が速く、軽く、きれいで、
+4. **図形・文字・ボタン・パーティクル・弾・床のタイルは生成しない。** Canvas で描く方が速く、軽く、きれいで、
    画面の大きさにも追従できる。操作部とボタンは入力キット（`$game-controls`）が描く。
 
 ## 2. 作り方
@@ -58,6 +61,42 @@ description: ゲームの絵と音を用意する。画像の作り方（内蔵�
    （URL は 10 分で失効する。切れたら `get_asset(asset_id)` で取り直す）。
 5. 縮小して置く: `convert /tmp/hero.png -resize 512x512 assets/hero.png`
 
+## 3.5 フリー素材（CC0）を探して取り込む
+
+`search_stock_assets(kind, query)` で探し、合うものを `import_stock_asset(name, stock_id)` で取り込む。
+取り込んだ素材は生成した素材と同じ扱いになる（`download_url` を取得する・`list_assets` に出る・リミックス先に残る）。
+
+| kind | 何がある | 探す語の例 |
+|---|---|---|
+| `image` | 2D のキャラ・敵・アイテム・タイル・背景の部品・UI・アイコン。**歩き・ジャンプ・攻撃の連番フレーム** | `platformer player walk` / `enemy walking` / `coin` / `tile grass` / `button` |
+| `audio` | 効果音（打撃・足音・UI・レトロ・カジノ・RPG）、短いジングル（勝利・失敗・レベルアップ）、ボイス | `jump` / `footstep` / `click` / `coin` / `jingle win` / `laser` |
+| `model_3d` | 低ポリの 3D キット（建物・乗り物・武器・自然）、**アニメ付きのキャラクター**（idle / walk / sprint / jump / attack…）、人型のアニメ集 | `character` / `blocky character` / `car` / `tree` / `animation library` |
+
+- **語は英語で短く**（素材の名前が英語）。1 つ目で見つからなければ語を変えて 2〜3 回まで。
+- 結果は良く合う順。`pack`（パック名）が同じものは絵柄がそろっている。続きは `next_cursor` を渡す。
+- **連番フレーム**（`playerBlue_walk1` … `playerBlue_walk5`）は `name` の末尾の数字順に 1 枚ずつ取り込む
+  （1 枚で `stock` 枠を 1 回）。`name` は `hero-walk-1` のように付け、コードで 8〜12 fps で切り替える:
+
+  ```js
+  const walk = [1, 2, 3, 4, 5].map((n) => loadImage(app.assets.url(`assets/hero-walk-${n}.png`)))
+  // 毎フレーム: frame = walk[Math.floor(time * 10) % walk.length]
+  ```
+
+- **3D は結果の `animations`**（クリップ名の一覧）を `AnimationMixer` で再生する（`$game-3d-and-bundles`）:
+
+  ```js
+  const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/hero.glb'))
+  const mixer = new THREE.AnimationMixer(gltf.scene)
+  mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'walk')).play()
+  // 毎フレーム: mixer.update(deltaSeconds)
+  ```
+
+  人型のアニメ集（`universal-animation-library`）は同じ骨格のモデル用。別のモデルに当てるなら
+  `three/addons/utils/SkeletonUtils.js` の `retargetClip` を使う。
+- 画像は PNG、音は MP3（元が OGG でも変換済み）、3D はテクスチャを埋め込んだ 1 つの GLB で届く。
+- 素材はどれも CC0（クレジット表記は不要。ゲームのページに Platform が出典をまとめて表示する）。
+- 3D の枠が閉じている（ツール一覧に `generate_model_3d` が無い）間は、3D の取り込みも `TOOL_NOT_ALLOWED` になる。
+
 ## 4. 取得と登録
 
 - 結果の `download_url` は `curl -fsSL -o <suggested_path> '<download_url>'` で取得する（`suggested_path` は `assets/…`）。
@@ -77,7 +116,7 @@ description: ゲームの絵と音を用意する。画像の作り方（内蔵�
 
 | エラー | 意味 | すること |
 |---|---|---|
-| `BUDGET_EXCEEDED` | その種類の枠を使い切った | 残りは Canvas の描画と Web Audio の合成で作る。やり直さない |
+| `BUDGET_EXCEEDED` | その種類の枠（取り込みなら `stock` の枠）を使い切った | 取り込みの枠が尽きたら生成で、生成の枠が尽きたら Canvas の描画と Web Audio の合成で作る。やり直さない |
 | `INSUFFICIENT_CREDITS` | 利用者のクレジットが尽きた（どのツールも使えない） | 以後ツールを呼ばない。手元の素材と描画・合成だけで、いまの状態をすぐ完成させる |
 | `CONTENT_BLOCKED` | 内容で断られた | 表現を変えて 1 回だけやり直す。だめなら描画で作る |
 | `ASSET_NOT_READY` | アップロードがまだ届いていない | アップロードの `curl` が成功したか確かめてから呼び直す |
@@ -87,7 +126,8 @@ description: ゲームの絵と音を用意する。画像の作り方（内蔵�
 | `ASSET_TOO_LARGE` | ファイルが大きすぎる | 縮小・短くしてからアップロードする |
 | `TOOL_NOT_ALLOWED` | このターンでは使えないツール | 使わない（描画・合成で作る） |
 | `TEXTURE_SOURCE_UNSUPPORTED` | `convert_texture` の元が PNG / JPEG ではない（WebP など） | PNG の素材（`upload_image` したもの）を渡す |
-| `CONVERSION_FAILED` | KTX2 に変換できなかった | 1 回だけやり直す。だめならその画像は PNG のまま 2D で使う |
+| `CONVERSION_FAILED` | KTX2 に変換できなかった / フリー素材の音を MP3 にできなかった | 1 回だけやり直す。だめならその画像は PNG のまま 2D で使う。音は別の素材を探す |
+| `ASSET_NOT_FOUND`（`import_stock_asset`） | その `stock_id` が無い | `search_stock_assets` の結果の `stock_id` をそのまま渡す |
 
 **素材が 1 つ手に入らなくてもゲームは完成させる。** 素材は見た目を良くするもので、遊べることが先。
 
