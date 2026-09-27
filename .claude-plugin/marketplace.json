@@ -1,0 +1,16 @@
+{
+  "name": "game-sns",
+  "owner": {
+    "name": "Moon Technica"
+  },
+  "metadata": {
+    "description": "game-sns のミニゲームを手元の Coding Agent で作る Creator Kit（Skills・SDK・検証器・Platform MCP）"
+  },
+  "plugins": [
+    {
+      "name": "game-sns",
+      "source": "./plugins/game-sns",
+      "description": "game-sns のミニゲームを手元の Coding Agent で作る Creator Kit（Skills・SDK・検証器・Platform MCP）"
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+---
+name: game-screen-layout
+description: ゲーム画面を、スマホの縦画面・横画面・PC の横長画面のどれでも崩れずに全面で見せる。どのゲームでも必ず使う。canvas の大きさと高解像度対応、プレイ領域の拡大縮小、HUD とスマホの操作部の置き場所、文字の大きさ、ポーズと再開、タイトル・リザルト画面の作り方、リザルトの画面を共有するボタン（app.share.capture / app.ui.openShare）を扱う。layout, responsive, canvas, devicePixelRatio, HUD, safe area, orientation, pause.
+---
+
+# ゲーム画面（どの画面の形でも崩れない）
+
+Platform はゲームを**枠の全面**に出す。枠の形はスマホの縦長（例 390×844）、スマホの横長、
+タブレット、PC の横長（例 1440×900）のどれにもなり、途中で変わる（回転・ウィンドウの大きさ変更・全画面の切り替え）。
+**どの形でも、遊べる大きさで、何も切れずに、全面が使われている**こと。
+
+## 1. canvas は全面・実ピクセルで描く
+
+```ts
+const canvas = document.createElement('canvas')
+canvas.style.display = 'block'
+Object.assign(document.body.style, { margin: '0', overflow: 'hidden', background: '#0b1020' })
+document.body.appendChild(canvas)
+const ctx = canvas.getContext('2d')!
+
+let view = { width: 0, height: 0 }                 // CSS px。ゲームの座標はこちらで考える
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3)
+  view = { width: window.innerWidth, height: window.innerHeight }
+  canvas.style.width = `${view.width}px`
+  canvas.style.height = `${view.height}px`
+  canvas.width = Math.round(view.width * dpr)
+  canvas.height = Math.round(view.height * dpr)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)            // 以後は CSS px で描ける
+  layout()                                         // プレイ領域・HUD・盤面の位置を決め直す
+}
+window.addEventListener('resize', resize)
+resize()
+```
+
+- `resize` は回転・全画面の切り替えでも来る。**大きさを起動時の 1 回だけで決めない。**
+- 全画面はゲームから出さない（`requestFullscreen()` を呼ばない）。Platform の枠の全画面ボタンが出す。
+  **カメラ / マイクを使うゲームでは呼んでもブラウザに断られる**（使用中の表示を隠さないため、Platform が枠ごと全画面にする）。
+- three.js は `renderer.setPixelRatio(Math.min(devicePixelRatio, 2))`、`renderer.setSize(w, h)`、
+  `camera.aspect = w / h; camera.updateProjectionMatrix()`。
+- `manifest.json` の `orientation` は**実際に合う向き**を書く（`portrait` / `landscape` / `any`）。
+  ただし Platform は向きを固定しない。**違う向きでも遊べる**レイアウトにする（§2）。
+
+## 2. プレイ領域の決め方（2 通り。どちらかを選ぶ）
+
+| 方式 | 向くゲーム | 作り方 |
+|---|---|---|
+| **A. 固定の論理サイズを拡大縮小**（レターボックス） | 盤面・パズル・カード・固定画面のアクション・縦シュー | 論理サイズ（例 縦 360×640 / 横 640×360）を決め、`scale = min(view.width / W, view.height / H)` で**全体が収まる最大**に拡大して中央に置く。余りは背景（絵や色）で埋める。**黒い帯のままにしない** |
+| **B. 見える範囲を広げる** | 横スクロール・見下ろし・3D・ランナー | 1 単位の大きさ（例: キャラの高さ = 画面の短辺の 1/8）を短辺から決め、長辺方向は**見える範囲が広がる**。横長の PC では遠くまで見える |
+
+- どちらでも**遊びに要るものは全部見える**こと。B では「画面が広い方が有利」になりすぎないよう、敵の出現範囲などを
+  見える範囲ではなく論理的な範囲で決める。
+- 盤面・マスは短辺から決め、**1 マス 44px 以上**を保つ。入り切らないならマス数ではなくレイアウト（縦並び⇔横並び）を変える。
+- 縦長のスマホで横長の論理サイズ（またはその逆）を小さく出すだけにしない。向きごとに配置を変える
+  （例: 縦ではスコア欄を上、横では右）。
+
+## 3. HUD とスマホの操作部の置き場所
+
+```text
+┌──────────────────────────────┐
+│ スコア・残機・時間        ⏸ 🔈 │ ← HUD は上端（端から 16px 以上内側）。ポーズとミュートは右上（44px 以上）
+│                              │
+│         プレイ領域            │
+│                              │
+│ ◯ スティック     ジャンプ ◯  │ ← スマホのとき下の約 180px は操作部（$game-controls のキット）
+└──────────────────────────────┘
+```
+
+- **スマホの操作部が出ている間**（`input.mode === 'touch'`）は、下端から約 180px の左右の角に
+  重要な物（自機の立ち位置・足場・敵・ボタン）を置かない。方式 B ならカメラを少し上にずらす。方式 A なら
+  プレイ領域の下端を操作部の上に合わせる（縦画面なら余りがあることが多い）。
+- 文字と操作部を**重ねない**。スコアの桁が増えても隣とぶつからないよう、欄の幅を先に確保する。
+- 画面の端 16px には触る物を置かない（OS の端の操作、角の丸み、ノッチ）。
+
+## 4. 文字
+
+- **14px 以上**（スコア・残り時間は 20px 以上）。`ctx.font` の大きさは CSS px で指定する（`setTransform` 済みなら DPR は不要）。
+- 画面幅に比例して文字を大きくしない。大きさの段を決めて使う（見出し 28〜36px / 本文 16px / 補足 14px）。
+- 背景とのコントラストを取る（明るい背景の上は影か縁取りを付ける）。色だけで情報を伝えない（形・文字も変える）。
+- 長い文は行を折り返す。入り切らないときは文字を小さくするのではなく、行数を増やすか文を短くする。
+- 文言は日本語。
+
+## 5. 画面の流れ
+
+| 画面 | 中身 |
+|---|---|
+| **タイトル** | ゲームそのものの画面の上に、タイトル・1〜2 行の操作説明（入力方法ごと）・「タップ / クリック / キーでスタート」。**説明だけのページや「遊び方」画面を別に作らない** |
+| **プレイ** | 最初の数秒で何をすればよいか分かる（最初の敵はゆっくり、最初の問題は簡単） |
+| **ポーズ** | ポーズボタン / Escape / P で止まる。「再開」「最初から」と操作説明を出す |
+| **リザルト** | スコア・勝敗・自己ベスト（`app.store` を使うなら）と「もう一度」（タップ / クリック / Space）。すぐにやり直せる |
+
+- 押したのに何も起きない時間を作らない（押したら必ず見た目か音が変わる）。
+- 読み込みに時間がかかるものは進み具合を表示する。
+
+## 5.1 リザルトを共有する（`app.share.capture` / `app.ui.openShare`）
+
+**API の正本は `<kit>/sdk/app-sdk/spec.md` §3.4 と §8.5**。
+
+スコア・勝敗・作った作品のように**人に見せたくなる結果がある遊び**なら、リザルトに「共有」ボタンを置く。
+結果が無い遊び（眺めるだけ・終わりが無い）には無理に付けない。
+
+- `manifest.json`: `sdkVersion` は `2`、`capabilities` に **`share.capture`**（画面を預ける）と **`ui.openShare`**（共有を開く）。
+- 押すと、今の画面が画像として Platform に預けられ、Platform の共有ダイアログが開く。共有されるリンクは
+  Platform の App のページで、その画像がリンクの画像（SNS のカード）とページの先頭に出る。
+  **リンク（URL）は App が作らない・渡せない**。共有シートもダイアログのボタンで開くので、App は開かない。
+
+```ts
+import { app } from '@workspace/app-sdk'
+
+async function shareResult(score: number) {
+  renderResult() // リザルトを描く（WebGL / WebGPU なら renderer.render(...)）
+  let captureId: string | undefined
+  try {
+    // 描いた直後、同じ処理の中で呼ぶ（await を挟まない）。後で呼ぶと WebGL / WebGPU の画面は真っ黒になる
+    ;({ captureId } = await app.share.capture(canvas))
+  } catch (error) {
+    console.warn('share.capture failed', error) // 撮れなくてもリンクだけで共有を続ける
+  }
+  try {
+    await app.ui.openShare({ ...(captureId ? { captureId } : {}), text: `スコア ${score} 点！` })
+  } catch (error) {
+    console.warn('openShare failed', error)
+    // 公開前の試遊では共有できない。App の画面に短く「いまは共有できません」を出す（遊びは続ける）
+  }
+}
+```
+
+- ボタンはリザルトの「もう一度」の隣。44px 以上、タップ / クリック / キー（例: `S`）のどれでも押せる。
+  連打で何枚も預けないよう、押したら終わるまでボタンを無効にする（**1 分 6 枚・1 日 50 枚まで**。未登録の人は半分）。
+- 渡すのは `canvas`（`HTMLCanvasElement` / `OffscreenCanvas`）か画像の `Blob`。SDK が長辺 1600px の JPEG にする。
+  透明な部分は黒になるので、背景を塗ったリザルトを撮る。DOM の HUD は写らない（canvas だけ）。
+  スコアを画像に残したいなら canvas に描く。
+- `text`（一言）は 100 文字まで。スコアや結果を短く。URL・ハッシュタグの羅列を入れない。
+- 画像は**公開**され（リンクを知っていれば誰でも見られる）、90 日で消える。**利用者が入力した文章・チャット・
+  個人の情報が写る画面を撮らない**（表示名とスコアは可）。
+- 失敗しても遊びは止めない: 撮れない（`INVALID_ACTION` / `RATE_LIMITED` / `INTERNAL`）ならリンクだけで開く。
+  公開前の試遊では撮るのも開くのも `FORBIDDEN`（短く「いまは共有できません」を出すだけにする）。
+
+## 6. 止まる・再開する
+
+- `app.lifecycle.onPause` と、画面が隠れたとき（`document.visibilityState === 'hidden'`）に**ゲームを止める**:
+  ループ（`requestAnimationFrame` / `renderer.setAnimationLoop(null)`）とタイマーを止め、音を `suspend()` し、
+  ポーズ画面にする。入力キットの押しっぱなしは自動で離される。
+- 再開は**利用者の操作で**（ポーズ画面の「再開」）。戻った瞬間に敵が動き出して負けない。
+- `requestAnimationFrame` の時間差は上限を付ける（`dt = Math.min(dt, 1 / 30)`）。止まっていた時間ぶん一気に進めない。
+
+## 7. 出力前のチェック
+
+- [ ] 390×844（縦）・844×390（横）・1440×900（PC）のどれでも、切れず・はみ出さず・全面が使われている
+- [ ] `resize` でプレイ領域・HUD・盤面が決め直される
+- [ ] 高解像度でぼけない（DPR を掛けた canvas）
+- [ ] HUD・文字・スマホの操作部が互いに重ならない。触る物は 44px 以上・端から 16px 以上内側
+- [ ] ポーズ（ボタン / Escape / P）とミュートがあり、画面が隠れたら止まる
+- [ ] タイトル → プレイ → リザルト → もう一度 が、タップ / クリック / キーのどれでも回る
+- [ ] 共有を付けたなら: `share.capture` と `ui.openShare` を宣言し、リザルトを描いた直後に撮り、失敗してもリンクだけで開く・遊びは止まらない

@@ -1,0 +1,20 @@
+{
+  "name": "game-sns",
+  "interface": {
+    "displayName": "game-sns Creator Kit"
+  },
+  "plugins": [
+    {
+      "name": "game-sns",
+      "source": {
+        "source": "local",
+        "path": "./plugins/game-sns"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
