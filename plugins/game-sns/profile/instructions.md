@@ -303,6 +303,7 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 |---|---|
 | `SDK_VERSION_DEPRECATED`（`kit_outdated`） | Kit が古い。利用者に Kit の更新（Claude Code: `/plugin marketplace update`、Codex: プラグインの更新）を頼む。更新後は新しい Kit の `scripts/kit.mjs` で `get_sdk` → `setup` → `link`（`source/` の参照と `.game-sns.json` を新しい Kit へ向ける）をやり直す |
 | `get_build` が `failed`・`error_code: SDK_VERSION_MISMATCH` | `manifest.json` の `sdkVersion` が今の SDK（この Kit の SDK）と違う。`<kit>/sdk/app-sdk/MIGRATION.md` の手順で上げてから 3. からやり直す |
+| `get_build` が `failed`・`error_code` が取り込みの検査のコード（`MANIFEST_MISSING` / `MANIFEST_UNREADABLE` / `UNREADABLE_ARCHIVE` / `PATH_TRAVERSAL` / `ARTIFACT_TOO_LARGE` / `TOO_MANY_FILES` など） | `outputs/dist.tar.gz` の形が Platform の取り込みを通らない（検証まで進んでいないので report は無い）。`kit.mjs check` で同じ検査を手元で回して直し、3. からやり直す |
 | `QUOTA_EXCEEDED` / `RATE_LIMITED` | 送信や素材の上限（素材の予算は App ごと・UTC の 1 日。結果の `budget.resets_at`）。少し待つよう利用者に伝える。何度も送り直さない |
 | `FORBIDDEN` | この App を編集できない（別のアカウントの App）。利用者に確認する |
 | `INVALID_ACTION` | マージ中・生成中など、今は送れない状態。`get_app` の `running_job` / `merge_in_progress` を見て待つ |
