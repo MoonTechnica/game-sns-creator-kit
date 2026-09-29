@@ -25,6 +25,7 @@
 | `$game-asset-tools` | 絵や音を用意するとき（素材ツールがあるときは必ず） |
 | `$game-phaser` | **2D を同梱の Phaser 4 で作ると決めたとき**（§4.2。素材の読み込み・入力・画面・物理の Platform との継ぎ目） |
 | `$game-3d-and-bundles` | 3D で描くとき・ステージが複数あるとき・素材が大きいとき |
+| `$game-3d-studio` | Blender で 3D の素材を作るとき（GLB のモデリング・手直し・リグとアニメーション・3D から 2D のスプライト・ベイク） |
 | `$game-multiplayer` | オンライン対戦（2〜8 人）のとき（§1） |
 | `$game-leaderboard` | ランキング・順位・ハイスコア・タイムアタックが遊びにあるとき（`app.leaderboard`） |
 | `$game-documents` | 非同期対戦（交代で 1 手ずつ・相手が同時にいない）・攻め合い・記録への挑戦・みんなで育てる世界のとき（`app.documents`。§1） |

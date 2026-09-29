@@ -36,6 +36,7 @@ app.bundles.unload('stage2')
   `retryable` なら「タップ / クリックで再試行」を出し、同じ `load` をもう一度呼ぶ。
 - `bundles/` の外（起動前に全部届く分）は **20 MiB まで**、10 MiB を超えると警告
   （スマートフォンの回線で起動を待たせる）。
+- GLB を自分で作る・手直しする・動かすなら `$game-3d-studio`（Blender）。
 - `source.zip` に `bundles/` の素材を入れない。次のターンは `list_assets` から取り直す
   （自分で作った音・GLB は `upload_asset` で登録する。`$game-asset-tools` §4）。
 
