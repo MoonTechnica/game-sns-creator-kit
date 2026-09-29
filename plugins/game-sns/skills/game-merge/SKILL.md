@@ -52,6 +52,13 @@ theirs が足した素材は、このターンの前に Platform が素材台帳
 `source.zip` には素材が入っていないので、`bundles/` を使うなら `$game-asset-tools` のとおり `list_assets` から取り直して元のパスへ置く。
 **素材を消さない**（ours の素材も theirs の素材も残す）。
 
+## 3.5 掲載情報（`listing/`）
+
+取り込む先（ours）の掲載情報を保つ。**`./input/listing.json` は ours の今の掲載情報**（利用者の手直しを含む）なので、
+`listing/listing.json` はこの値にする（衝突していても theirs の名前・説明で上書きしない）。
+取り込んだ変更で遊び方・目的が変わったときだけ、`$game-listing` §2 のとおり `description` / `howToPlay` を直す
+（`userEdited` の項目は変えない）。`listing/icon.*` / `listing/cover.*` が `binary` で衝突したら **ours を残す**。
+
 ## 4. 出力前のチェック
 
 - [ ] `grep -rnE '^(<<<<<<<|>>>>>>>) ' src server assets manifest.json package.json` が何も返さない

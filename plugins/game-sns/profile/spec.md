@@ -43,8 +43,9 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=1)`
 │   ├── game-leaderboard/    # ランキング（ボードの決め方・送る瞬間・順位表の表示）
 │   ├── game-documents/      # 非同期対戦・共有の場（Schema・手番・衝突・招待とマッチング）
 │   ├── game-ai/             # ゲーム内 AI（指示文・Structured Outputs・費用・失敗しても遊べる作り）
+│   ├── game-listing/        # 公開ページの掲載情報（名前・説明・遊び方・ジャンル・タグ・アイコン・カバー）
 │   └── game-merge/          # 2 つの版を合わせる（マージ）
-├── input/                   # 前の版・マージの材料（instructions.md §4.0）
+├── input/                   # 前の版・今の掲載情報（listing.json）・マージの材料（instructions.md §4.0）
 └── outputs/                 # ここに置いたものだけが Platform に渡る
 ```
 
@@ -56,7 +57,7 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=1)`
 | 2 | `<kit>/sdk/app-sdk/spec.md` | `manifest.json` の形、Capability、`app.*` の API、CSP と禁止事項 |
 | 3 | `<kit>/sdk/app-server-sdk/spec.md` | 対戦を作る場合のみ。`defineSpace` の書き方（状態・入力・`step`・`finish`） |
 | 4 | `<kit>/sdk/sample-app/` | 1〜3 を満たした最小実装。**構成はこれに倣う** |
-| 4b | `<kit>/skills/*/SKILL.md` | 操作・画面・素材・3D・対戦・ランキング・ゲーム内 AI の作り方（`instructions.md` §0 の表のとおりに使う） |
+| 4b | `<kit>/skills/*/SKILL.md` | 操作・画面・素材・3D・対戦・ランキング・ゲーム内 AI・掲載情報の作り方（`instructions.md` §0 の表のとおりに使う） |
 | 5 | `<kit>/sdk/*/build-config/` | バンドル設定。SDK を bundle に含めないための外部参照指定 |
 
 ## 3. この Profile が固定していること

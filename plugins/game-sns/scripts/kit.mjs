@@ -40048,7 +40048,7 @@ function agentsMd(kitRoot) {
     "",
     `- \`<kit>\`（Creator Kit の置き場）は \`${kitRoot}\`（\`.game-sns.json\` の \`kit_root\`）。`,
     `- **最初に \`${kitRoot}/profile/instructions.md\` を読み、それに従う**（手元での進め方は同 §8）。`,
-    "- `$game-controls` と `$game-screen-layout` は必ず使う。",
+    "- `$game-controls` と `$game-screen-layout` と `$game-listing`（掲載情報）は必ず使う。",
     "- `.game-sns.json` は手で書き換えない（`node <kit>/scripts/kit.mjs` が書く）。",
     "",
     "## 動作の確認はアプリのプレビューで",

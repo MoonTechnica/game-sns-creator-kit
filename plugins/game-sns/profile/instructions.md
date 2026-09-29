@@ -22,6 +22,7 @@
 |---|---|
 | `$game-controls` | **必ず**。PC（キーボード・マウス）とスマホ（画面の操作部・タップ・スワイプ）の両方で遊べる操作を作る。市販のコントローラー（ゲームパッド）はその上乗せで、対応度を `manifest.json` の `gamepad` に書く |
 | `$game-screen-layout` | **必ず**。どの画面の形でも崩れない画面・HUD・タイトル・ポーズ・リザルト。結果を人に見せたくなる遊びならリザルトに「共有」（`app.share.capture` / `app.ui.openShare`） |
+| `$game-listing` | **必ず**。公開ページの掲載情報（ゲーム名・キャッチコピー・説明・遊び方・ジャンル・タグ・アイコン・カバー）を `listing/` に用意する。初回は全部作り、2 回目以降は中身と合わなくなった項目だけ直す |
 | `$game-asset-tools` | 絵や音を用意するとき（素材ツールがあるときは必ず） |
 | `$game-phaser` | **2D を同梱の Phaser 4 で作ると決めたとき**（§4.2。素材の読み込み・入力・画面・物理の Platform との継ぎ目） |
 | `$game-3d-and-bundles` | 3D で描くとき・ステージが複数あるとき・素材が大きいとき |
@@ -96,9 +97,9 @@
 
 | ファイル | 中身 |
 |---|---|
-| `source.zip` | ソース一式（`node_modules` と `dist` と **`bundles/` の素材**は入れない）。次のターンとリミックスの土台 |
+| `source.zip` | ソース一式（`node_modules` と `dist` と **`bundles/` の素材**は入れない）。次のターンとリミックスの土台。**掲載情報の `listing/`（`$game-listing`）を必ず含める** |
 | `dist.tar.gz` | **配信用 Artifact**。下の構成を**書庫の根**に置いて固める |
-| `build-report.json` | `{ "manifest": <manifest.json と同じ JSON>, "buildConfig": { ... }, "notes": ["…"] }`（`notes` は実装できなかった要求・Skill と食い違った点。無ければ省く） |
+| `build-report.json` | `{ "manifest": <manifest.json と同じ JSON>, "buildConfig": { ... }, "notes": ["…"], "listingRequested": ["title"] }`（`notes` は実装できなかった要求・Skill と食い違った点・掲載情報を直した理由。無ければ省く。`listingRequested` は利用者が手で直した掲載情報の項目を、依頼どおりに変えたときだけ。`$game-listing` §5） |
 
 `dist.tar.gz` の中身（`tar -C dist -czf ../outputs/dist.tar.gz .` 相当。**`dist/` を入れ子にしない**）:
 
@@ -143,7 +144,8 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 | 置かれるもの | 意味 | やること |
 |---|---|---|
-| 何も無い | 新しい作品 | 下の 1. から作る |
+| `listing.json` | **今の掲載情報**（毎ターン必ずある。利用者が手で直した項目 `userEdited` と、公開に足りない項目 `missing` を含む） | `$game-listing` に従う。ソースの `listing/listing.json` より優先する |
+| ほかに何も無い | 新しい作品 | 下の 1. から作る |
 | `source.zip` | **前の版のソース一式**（前のターンが出した `source.zip` そのもの） | 展開して土台にし、**利用者の説明が求める変更だけ**を加える。作り直さない |
 | `source.zip.url` | 前の版が大きいので URL で渡した（中身は 1 行の URL） | `curl -fsSL "$(cat /workspace/input/source.zip.url)" -o /workspace/input/source.zip` で取得してから上と同じ |
 | `merge-report.json` ほか | 2 つの版を合わせるターン | `$game-merge` に従う |
@@ -170,7 +172,8 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
    （ルールは 1 か所に書き、画面の予測と練習モードも同じ定義を使う）。
 4. ビルドして `dist/` を作り、**実際に動かして確かめる**（`node` で読み込める、構文エラーが無い、
    `manifest.json` が仕様どおり）。
-5. `./outputs/` に 3 つのファイルを置く。
+5. 掲載情報を `listing/` に作る（`$game-listing`。ゲームが出来てから書くと、名前・説明・遊び方・画像が中身と合う）。
+6. `./outputs/` に 3 つのファイルを置く。
 
 ### 4.2 道具を選ぶ（エンジン・描画・物理）
 
@@ -240,6 +243,7 @@ Kit には描画と物理の道具が全部入っている。**どれを使う�
 | 実装できない要求がある（外部通信・保存容量超過など） | 実装できる範囲に落とし、`build-report.json` にそう書く |
 | 絵や音を生成するか描くか | キャラ・背景・効果音・BGM は生成、図形と UI は描く。ツールが無ければ全部描く |
 | 操作が説明に書かれていない | `$game-controls` の references/genres.md の定番に従う |
+| 掲載情報を直すべきか迷う | 遊び方・目的・見た目が変わったときだけ直す。細部の修正では直さない（`$game-listing` §2） |
 | Skill と遊びの説明が食い違う | 説明に従う（§0 の優先順位）。`build-report.json` の `notes` に書く |
 
 ## 8. 手元で作るとき（Creator Kit）
@@ -270,7 +274,8 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
    `download_source({ app_id })` → `kit.mjs pull --url <url> --sha256 <sha256> --revision-id <revision_id>`
    （`source/` を置き換える。`node_modules` は残る）。**手元に送っていない変更があるなら上書きせず §8.4 で合わせる。**
 2. **作る**: `source/` で `npm install`（または `bun install`）してからビルドする。依存は足さない（§3）。
-3. **出力**: `source/dist/` を作り、`outputs/build-report.json` を書き（§2）、`kit.mjs pack` を実行する。
+3. **出力**: `source/dist/` を作り、`source/listing/` の掲載情報を用意し（`$game-listing`。今の値は `get_app` の `listing`）、
+   `outputs/build-report.json` を書き（§2）、`kit.mjs pack` を実行する。
    `pack` は `outputs/source.zip` と `outputs/dist.tar.gz` を作り、`begin_build` に渡す引数（`files` ほか）を JSON で出す。
 4. **検査**: `kit.mjs check`（取り込み + 静的検証。Platform と同じ検証器）。落ちたら直して 3. からやり直す。
    通っても Platform 側で必ず検証される（動的検証は Platform だけが行う）。
