@@ -25098,6 +25098,7 @@ class TarError extends Error {
   }
 }
 var decoder = new TextDecoder("utf-8", { fatal: false });
+var strictDecoder = new TextDecoder("utf-8", { fatal: true });
 function readString(block, offset, length) {
   const field = block.subarray(offset, offset + length);
   const end = field.indexOf(0);
@@ -25132,10 +25133,50 @@ function classify(typeflag) {
     return "directory";
   return "other";
 }
+function parsePax(bytes) {
+  const records = new Map;
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const space = bytes.indexOf(32, offset);
+    const length = space === -1 ? Number.NaN : Number(decoder.decode(bytes.subarray(offset, space)));
+    const end = offset + length;
+    if (!Number.isInteger(length) || length <= 0 || end > bytes.byteLength || bytes[end - 1] !== 10) {
+      throw new TarError("MALFORMED_HEADER", "a PAX extended header has a malformed record");
+    }
+    const record2 = strictDecoder.decode(bytes.subarray(space + 1, end - 1));
+    const equals = record2.indexOf("=");
+    if (equals <= 0) {
+      throw new TarError("MALFORMED_HEADER", "a PAX extended header has a malformed record");
+    }
+    records.set(record2.slice(0, equals), record2.slice(equals + 1));
+    offset = end;
+  }
+  return records;
+}
+function readLongName(bytes) {
+  const end = bytes.indexOf(0);
+  return strictDecoder.decode(end === -1 ? bytes : bytes.subarray(0, end));
+}
+function paxOverrides(records) {
+  const overrides = {};
+  const path = records.get("path");
+  if (path !== undefined)
+    overrides.path = path;
+  const size = records.get("size");
+  if (size !== undefined) {
+    if (!/^[0-9]+$/.test(size)) {
+      throw new TarError("MALFORMED_HEADER", `not a PAX size: "${size}"`);
+    }
+    overrides.size = Number(size);
+  }
+  return overrides;
+}
 function readTar(data) {
   const entries = [];
   let offset = 0;
   let emptyBlocks = 0;
+  let global = {};
+  let pending = null;
   while (offset + BLOCK <= data.byteLength) {
     const block = data.subarray(offset, offset + BLOCK);
     offset += BLOCK;
@@ -25152,20 +25193,37 @@ function readTar(data) {
       throw new TarError("UNSUPPORTED_FORMAT", `unsupported tar magic "${magic}"`);
     }
     const typeflag = String.fromCharCode(block[TYPEFLAG]);
-    if ("LKxg".includes(typeflag)) {
-      throw new TarError("EXTENDED_HEADER", `the archive uses an extended tar header (${typeflag})`);
-    }
     const prefix = readString(block, PREFIX.offset, PREFIX.length);
     const base = readString(block, NAME.offset, NAME.length);
-    const name = prefix === "" ? base : `${prefix}/${base}`;
-    const size = readOctal(block, SIZE.offset, SIZE.length);
+    const size = pending?.size ?? global.size ?? readOctal(block, SIZE.offset, SIZE.length);
     const end = offset + size;
     if (end > data.byteLength) {
-      throw new TarError("TRUNCATED", `the archive ends inside "${name}"`);
+      throw new TarError("TRUNCATED", `the archive ends inside "${base}"`);
     }
     const bytes = data.slice(offset, end);
     offset += Math.ceil(size / BLOCK) * BLOCK;
+    if (typeflag === "x") {
+      pending = { ...pending ?? {}, ...paxOverrides(parsePax(bytes)) };
+      continue;
+    }
+    if (typeflag === "g") {
+      global = { ...global, ...paxOverrides(parsePax(bytes)) };
+      continue;
+    }
+    if (typeflag === "L") {
+      pending = { ...pending ?? {}, path: readLongName(bytes) };
+      continue;
+    }
+    if (typeflag === "K") {
+      pending = pending ?? {};
+      continue;
+    }
+    const name = pending?.path ?? global.path ?? (prefix === "" ? base : `${prefix}/${base}`);
+    pending = null;
     entries.push({ name, type: classify(typeflag), typeflag, bytes });
+  }
+  if (pending !== null) {
+    throw new TarError("MALFORMED_HEADER", "an extended header is not followed by an entry");
   }
   return entries;
 }
@@ -25222,7 +25280,7 @@ async function importArtifact(archive) {
   for (const entry of entries) {
     const path = normalizeEntryName(entry.name);
     if (entry.type === "directory") {
-      if (path !== "")
+      if (path !== "" && path !== ".")
         assertSafePath(path);
       continue;
     }
