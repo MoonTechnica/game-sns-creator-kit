@@ -222,7 +222,8 @@ const session = await app.space.join(definition)   // 席が用意されるま�
 - **毎フレーム `send` しない**（1 通 4 KiB・毎秒 60 通まで）。同時操作の入力は `input.send()`（1 tick に 1 つ）、
   `send` はボタンを押したときの一回きりの操作（アイテム使用・降参など）だけ。
 - **待機**: 人数がそろうまでは Platform の待機室が面倒を見る。App が起動したとき `mode()` が `null` なら、
-  `join` はそろうまで待つ。その間は「相手を待っています」と招待ボタン（`app.ui.openInvite()`。`ui.openInvite` を宣言）を出す。
+  `join` はそろうまで待つ。その間は「相手を待っています」と招待ボタン（`app.ui.openInvite()`。`ui.openInvite` を宣言）を出し、
+  止まって見えないよう動いている表示を付ける（`$game-ux` §8）。
 - **席**: `session.players`（`onPlayers` で変化を受ける）で参加者の名前・役割・接続中かを常に出す。
   **自分がどれか**を色と「あなた」の表示で示す。`displayName` は空のことがある（「プレイヤー 2」などで補う）。
 - **接続**: `session.onConnection` で切断を表示し、戻ったら消す（再接続は SDK が行う）。

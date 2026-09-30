@@ -141,7 +141,8 @@ Platform の中では Artifact のファイルに URL が無い。**Loader に�
 - 回転・全画面の切り替えで大きさが変わる。**`this.scale.on('resize', () => this.layout())`** で HUD・可動範囲・
   `this.physics.world.setBounds(…)` を決め直す（B では `this.scale.gameSize` の幅と高さを使う）。
 - `this.scale.startFullscreen()` は呼ばない（全画面は Platform の枠のボタンが出す）。
-- 文字は `this.add.text(…)` を基準の大きさで 32px 以上にする（縮めて表示されるので、実際の画面で 16px 前後になる）。
+- 文字は `this.add.text(…)` を基準の大きさで本文 32px 以上・プレイ中の数字 48px 以上にする（縮めて表示されるので、
+  実際の画面で `$game-ux` §3 の 16px / 24px 前後になる）。背板か縁取り（`setStroke`）を付ける。
 
 ## 6. 物理
 
@@ -154,6 +155,9 @@ Platform の中では Artifact のファイルに URL が無い。**Loader に�
 Arcade / Matter は端末ごとに結果が同じになる約束が無い。対戦では相手と違う世界になる。
 
 ## 7. 止める・再開・共有
+
+- **手応え**（`cameras.main.shake`・tween の伸び縮み・`particles` の `explode`・ヒットストップ）は `$game-ux` の
+  references/feedback.md §4。揺れとパーティクルの量に `effects` を掛け、`cameras.main.flash` の全画面フラッシュは使わない。
 
 - **止める**: `app.lifecycle.onPause` と `document.visibilityState === 'hidden'` で、ゲームのシーンを止めてポーズ画面を出す
   （`this.scene.pause()` + ポーズ用のシーンを `this.scene.launch('pause')` で重ねる、または

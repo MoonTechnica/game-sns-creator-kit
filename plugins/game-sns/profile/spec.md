@@ -43,6 +43,7 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=1)`
 │   ├── game-leaderboard/    # ランキング（ボードの決め方・送る瞬間・順位表の表示）
 │   ├── game-documents/      # 非同期対戦・共有の場（Schema・手番・衝突・招待とマッチング）
 │   ├── game-ai/             # ゲーム内 AI（指示文・Structured Outputs・費用・失敗しても遊べる作り）
+│   ├── game-ux/             # 遊べる体験（最初の 1 手・手応え・読める文字・点滅と揺れの上限・再挑戦・設定の保存）
 │   ├── game-listing/        # 公開ページの掲載情報（名前・説明・遊び方・ジャンル・タグ・アイコン・カバー）
 │   └── game-merge/          # 2 つの版を合わせる（マージ）
 ├── input/                   # 前の版・今の掲載情報（listing.json）・マージの材料（instructions.md §4.0）
