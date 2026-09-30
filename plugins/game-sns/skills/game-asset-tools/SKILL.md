@@ -1,6 +1,6 @@
 ---
 name: game-asset-tools
-description: ゲームの絵と音を用意する。無料で使える既存素材（CC0。search_stock_assets / import_stock_asset）の探し方と取り込み方、画像の作り方（内蔵の画像生成、無い環境では generate_image）と、素材ツール（MCP。generate_image / upload_image / remove_background / convert_texture / generate_sound_effect / generate_music / generate_model_3d / upload_asset / list_assets / get_asset）の使い方、予算の配分、透過キャラクター・歩きなどの連番アニメ・アニメ付き 3D・効果音・BGM の手順、失敗したときの対処を扱う。画像・キャラクター・背景・モーション・効果音・BGM・3D モデルを用意するとき、または素材ツールが使えるときに使う。assets, sprites, animation frames, stock assets, CC0, sound effects, music, MCP tools, budget.
+description: ゲームの絵と音を用意する。無料で使える既存素材（CC0。search_stock_assets / import_stock_asset）の探し方と取り込み方、画像の作り方（内蔵の画像生成、無い環境では generate_image）と、素材ツール（MCP。generate_image / upload_image / remove_background / convert_texture / generate_sound_effect / generate_music / generate_model_3d / generate_motion / upload_asset / list_assets / get_asset）の使い方、予算の配分、透過キャラクター・歩きなどの連番アニメ・アニメ付き 3D・効果音・BGM の手順、失敗したときの対処を扱う。画像・キャラクター・背景・モーション・効果音・BGM・3D モデルを用意するとき、または素材ツールが使えるときに使う。assets, sprites, animation frames, stock assets, CC0, sound effects, music, MCP tools, budget.
 ---
 
 # 絵と音の用意（画像生成 + 素材ツール）
@@ -32,6 +32,7 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
    | 効果音 | 音の枠を 1 回ずつ | 4〜6 種（決定・ジャンプ・得点・ヒット・失敗・クリア） |
    | BGM | 音の枠を 1 回（1 分単位で課金） | 1 本（30 秒前後をループ） |
    | 3D モデル | 3D の枠（**ツール一覧に `generate_model_3d` があるときだけ**） | 主役 1〜2 体 |
+   | 人型のモーション | モーションの枠を 1 回ずつ（1 回 $0.08） | 主役の動作 3〜6 種（待機・歩き・走り・跳び・攻撃・やられ） |
 
 4. **図形・文字・ボタン・パーティクル・弾・床のタイルは生成しない。** Canvas で描く方が速く、軽く、きれいで、
    画面の大きさにも追従できる。操作部とボタンは入力キット（`$game-controls`）が描く。
@@ -45,6 +46,7 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 | 効果音 | `generate_sound_effect(name, prompt, duration_sec)`。短く具体的に（「軽いジャンプ音、上がる音程、0.3 秒」） | MP3。0.5〜2 秒 |
 | BGM | `generate_music(name, prompt, duration_sec=30)`。雰囲気・テンポ・楽器を書き「ループしやすい」と添える | MP3。ループ再生 |
 | 3D モデル | 透過した元画像の `asset_id`（§3 の結果、または `generate_image(transparent=true)` の結果）で `generate_model_3d(name, asset_id, polycount="low")`。**数分かかる** | GLB を `bundles/` に置く（`$game-3d-and-bundles`） |
+| 人型のモーション | フリー素材のアニメ付きキャラ（§3.5）に無い動きだけ `generate_motion(name, prompt, duration_sec)`。prompt は英語で 1 人の動きを具体的に（「A person swings a sword overhead, then steps back.」）。ループする動き（待機・歩き）は 1 周期の長さにする | **FBX のままゲームに入れない。** `$game-3d-studio` §4.3.1 でキャラの骨格にリターゲットし、キャラの GLB にクリップとして入れる |
 | 自分で作った音（Web Audio の書き出し）・GLB | `upload_asset(name, kind)` で登録（§4）。登録しないと次のターンで消える | — |
 
 - 生成したままの PNG（1 枚 1〜2 MB）を `assets/` に入れない。必ず縮小する。
