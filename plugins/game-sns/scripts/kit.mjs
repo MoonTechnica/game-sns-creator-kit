@@ -23793,6 +23793,8 @@ var ORIENTATIONS = ["portrait", "landscape", "any"];
 var orientationSchema = exports_external.enum(ORIENTATIONS);
 var GAMEPAD_SUPPORTS = ["full", "partial", "none"];
 var gamepadSupportSchema = exports_external.enum(GAMEPAD_SUPPORTS);
+var SAFE_AREA_MODES = ["host", "app"];
+var safeAreaModeSchema = exports_external.enum(SAFE_AREA_MODES);
 var artifactPathSchema = exports_external.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/, "must be a relative path inside the artifact").refine((path) => path.split("/").every((segment) => segment !== "." && segment !== ".."), 'must not contain "." or ".." segments');
 var spaceRoleIdSchema = exports_external.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/, "must be an identifier");
 var spaceRoleSchema = exports_external.strictObject({
@@ -23921,7 +23923,8 @@ var V2_MANIFEST_KEYS = [
   "documentSchema",
   "ai",
   "renderer",
-  "device"
+  "device",
+  "safeArea"
 ];
 var manifestObjectSchema = exports_external.strictObject({
   manifestVersion: exports_external.literal(MANIFEST_VERSION).default(MANIFEST_VERSION),
@@ -23942,7 +23945,8 @@ var manifestObjectSchema = exports_external.strictObject({
   documentSchema: documentSchemaSchema.nullable().optional(),
   ai: aiManifestSchema.nullable().optional(),
   renderer: rendererSchema.optional(),
-  device: deviceManifestSchema.optional()
+  device: deviceManifestSchema.optional(),
+  safeArea: safeAreaModeSchema.optional()
 });
 function rejectV2FeaturesInV1(manifest, ctx) {
   if (manifest.sdkVersion >= SDK_VERSION_V2)
@@ -24170,6 +24174,12 @@ var spaceConnectionSchema = exports_external.strictObject({
 var spacePracticeSchema = exports_external.strictObject({
   role: exports_external.string().min(1)
 });
+var safeAreaInsetsSchema = exports_external.strictObject({
+  top: exports_external.number().min(0),
+  right: exports_external.number().min(0),
+  bottom: exports_external.number().min(0),
+  left: exports_external.number().min(0)
+});
 var contextPayloadSchema = exports_external.strictObject({
   identity: identitySchema,
   capabilities: exports_external.array(capabilitySchema),
@@ -24178,6 +24188,7 @@ var contextPayloadSchema = exports_external.strictObject({
   space: spaceConnectionSchema.optional(),
   practice: spacePracticeSchema.optional(),
   paused: exports_external.boolean().optional(),
+  safeArea: safeAreaInsetsSchema.optional(),
   documentId: exports_external.uuid().optional()
 });
 var notBothSpaceAndPractice = (value) => value.space === undefined || value.practice === undefined;

@@ -950,8 +950,8 @@ export function createInput<A extends string>(options: InputOptions<A>): Input<A
 
     const rest = () => {
       // 触れていないときは左下の定位置に薄く出して「ここで動かす」と分かるようにする
-      base.style.left = `calc(${EDGE_PX + STICK_RADIUS_PX}px + env(safe-area-inset-left, 0px))`
-      base.style.top = `calc(100% - ${EDGE_PX + STICK_RADIUS_PX}px - env(safe-area-inset-bottom, 0px))`
+      base.style.left = `calc(${EDGE_PX + STICK_RADIUS_PX}px + var(--app-safe-area-left, env(safe-area-inset-left, 0px)))`
+      base.style.top = `calc(100% - ${EDGE_PX + STICK_RADIUS_PX}px - var(--app-safe-area-bottom, env(safe-area-inset-bottom, 0px)))`
       base.style.opacity = '0.5'
       knob.style.transform = 'translate(0px, 0px)'
       stick = { x: 0, y: 0 }
@@ -992,8 +992,8 @@ export function createInput<A extends string>(options: InputOptions<A>): Input<A
   function buildDpad(): void {
     const make = (side: 'left' | 'right', index: number) => {
       const button = roundButton(side === 'left' ? '◀' : '▶', SECONDARY_BUTTON_PX + 8)
-      button.style.left = `calc(${EDGE_PX + index * (SECONDARY_BUTTON_PX + 8 + BUTTON_GAP_PX)}px + env(safe-area-inset-left, 0px))`
-      button.style.bottom = `calc(${EDGE_PX}px + env(safe-area-inset-bottom, 0px))`
+      button.style.left = `calc(${EDGE_PX + index * (SECONDARY_BUTTON_PX + 8 + BUTTON_GAP_PX)}px + var(--app-safe-area-left, env(safe-area-inset-left, 0px)))`
+      button.style.bottom = `calc(${EDGE_PX}px + var(--app-safe-area-bottom, env(safe-area-inset-bottom, 0px)))`
       bindPointerHold(button, (down) => {
         dpad = { ...dpad, [side]: down }
       })
@@ -1017,8 +1017,8 @@ export function createInput<A extends string>(options: InputOptions<A>): Input<A
       const size = index === 0 ? PRIMARY_BUTTON_PX : SECONDARY_BUTTON_PX
       const slot = slots[index] ?? slots[0]
       const button = roundButton(buttonSpecs[action].label ?? '', size)
-      button.style.right = `calc(${EDGE_PX + slot.right}px + env(safe-area-inset-right, 0px))`
-      button.style.bottom = `calc(${EDGE_PX + slot.bottom}px + env(safe-area-inset-bottom, 0px))`
+      button.style.right = `calc(${EDGE_PX + slot.right}px + var(--app-safe-area-right, env(safe-area-inset-right, 0px)))`
+      button.style.bottom = `calc(${EDGE_PX + slot.bottom}px + var(--app-safe-area-bottom, env(safe-area-inset-bottom, 0px)))`
       bindPointerHold(button, (down, id) => (down ? hold(action, id) : release(action, id)))
     })
   }

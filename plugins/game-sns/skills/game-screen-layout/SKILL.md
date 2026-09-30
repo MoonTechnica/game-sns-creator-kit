@@ -75,6 +75,32 @@ resize()
 - 文字と操作部を**重ねない**。スコアの桁が増えても隣とぶつからないよう、欄の幅を先に確保する。
 - 画面の端 16px には触る物を置かない（OS の端の操作、角の丸み、ノッチ）。
 
+### 3.1 セーフエリア（ノッチ・Dynamic Island・ホームインジケータ）
+
+**画面の端まで描き、HUD と操作部だけをセーフエリアの内側に置く**のが既定の作り方。
+
+1. `manifest.json` に **`"safeArea": "app"`** を書く。書かないと Host が描画領域をセーフエリアの内側に収め、
+   その外側（ノッチの横など）は黒い帯になる。
+2. **背景・世界・演出は画面の端まで**描く（canvas は親要素いっぱいのまま。セーフエリアで縮めない）。
+3. **押す物・読む物（HUD・ボタン・スティック・文字）はセーフエリアの内側**に置く。
+   - DOM の HUD は CSS 変数: `top: calc(var(--app-safe-area-top) + 16px); left: calc(var(--app-safe-area-left) + 16px);`
+     （`--app-safe-area-top` / `-right` / `-bottom` / `-left`。単位 px）
+   - canvas に描く HUD は `app.display.safeArea()`（`{ top, right, bottom, left }`）から位置を決め、
+     `app.display.onSafeAreaChange()` と `resize` で決め直す（端末を回すと左右と上下が入れ替わる）。
+   - `$game-controls` のキットの操作部は自動でこの内側に入る。
+4. `env(safe-area-inset-*)` は使わない（iframe の中では 0 になる端末がある）。
+5. **左上の角（約 56px 四方）は空けておく**。スマホのアプリでは Platform の「閉じる」ボタンが重なる。
+
+```text
+ ┌──────┬────────────────────────┬──────┐
+ │ノッチ│ ⓧ  スコア・残り時間  ⏸ 🔈 │      │ ← 背景は端まで。HUD は --app-safe-area-* の内側
+ │（背景│                        │      │
+ │ だけ）│      プレイ領域          │      │
+ │      │ ◯ スティック  ジャンプ ◯ │      │
+ └──────┴────────────────────────┴──────┘
+          ↑ ホームインジケータの上（--app-safe-area-bottom）に操作部
+```
+
 ## 4. 文字
 
 - **14px 以上**（スコア・残り時間は 20px 以上）。`ctx.font` の大きさは CSS px で指定する（`setTransform` 済みなら DPR は不要）。
@@ -154,6 +180,7 @@ async function shareResult(score: number) {
 - [ ] `resize` でプレイ領域・HUD・盤面が決め直される
 - [ ] 高解像度でぼけない（DPR を掛けた canvas）
 - [ ] HUD・文字・スマホの操作部が互いに重ならない。触る物は 44px 以上・端から 16px 以上内側
+- [ ] `manifest.json` に `"safeArea": "app"`。背景は画面の端まで描き、HUD・操作部は `--app-safe-area-*`（canvas なら `app.display.safeArea()`）の内側。左上の角は空いている
 - [ ] ポーズ（ボタン / Escape / P）とミュートがあり、画面が隠れたら止まる
 - [ ] タイトル → プレイ → リザルト → もう一度 が、タップ / クリック / キーのどれでも回る
 - [ ] 共有を付けたなら: `share.capture` と `ui.openShare` を宣言し、リザルトを描いた直後に撮り、失敗してもリンクだけで開く・遊びは止まらない
