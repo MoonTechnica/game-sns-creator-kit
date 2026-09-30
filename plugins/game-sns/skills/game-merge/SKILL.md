@@ -18,7 +18,8 @@ description: 2 つの版を合わせるターン（派生からの提案を本�
 ## 1. 手順
 
 1. `./input/merge-report.json` を読む。`kind`（`proposal` = 派生からの提案 / `sync_upstream` = 本流の取り込み）、
-   `intent`（**変更の意図**。題名と説明）、`files`（theirs が base から何を変えたか）、`conflicts`（衝突の一覧）が入っている。
+   `intent`（**変更の意図**。題名と説明。提案者が同意していれば `intent.requests` に**派生の作者が実際に頼んだ文**が
+   古い順に入っている。題名より具体的なことが多いので、衝突の解き方に迷ったらまずここを読む）、`files`（theirs が base から何を変えたか）、`conflicts`（衝突の一覧）が入っている。
 2. `source.zip`（`.url` なら `instructions.md` §4.0 のとおり取得）を展開して土台にする。`node_modules` は入れ直す。
 3. 衝突があれば `./input/merge-inputs.zip` を展開する。衝突した各ファイルの
    `base/<path>` / `ours/<path>` / `theirs/<path>` が入っている。**両側が base から何を変えたか**を読んでから直す（§2）。
@@ -54,8 +55,11 @@ theirs が足した素材は、このターンの前に Platform が素材台帳
 
 ## 3.5 掲載情報（`listing/`）
 
-取り込む先（ours）の掲載情報を保つ。**`./input/listing.json` は ours の今の掲載情報**（利用者の手直しを含む）なので、
-`listing/listing.json` はこの値にする（衝突していても theirs の名前・説明で上書きしない）。
+取り込む先（ours）の掲載情報を保つ。Platform は git で合わせる前に **theirs の `listing/` を ours のものに置き換えて**いるので、
+`source.zip` の `listing/` は最初から ours のもので、衝突もしない。**`./input/listing.json` は ours の今の掲載情報**
+（利用者の手直しを含む）なので、`listing/listing.json` はこの値にする（theirs の名前・説明で上書きしない）。
+`releaseNotes` は**取り込んだ変更を遊ぶ人向けに 1〜3 行で**書く（`intent` の題名・依頼文から。例「敵が 3 種類になった」）。
+誰の提案かは書かない（ゲームのページに Platform がコントリビューターとして添える）。
 取り込んだ変更で遊び方・目的が変わったときだけ、`$game-listing` §2 のとおり `description` / `howToPlay` を直す
 （`userEdited` の項目は変えない）。`listing/icon.*` / `listing/cover.*` が `binary` で衝突したら **ours を残す**。
 

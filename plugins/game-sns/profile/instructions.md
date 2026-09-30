@@ -150,6 +150,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 | `source.zip` | **前の版のソース一式**（前のターンが出した `source.zip` そのもの） | 展開して土台にし、**利用者の説明が求める変更だけ**を加える。作り直さない |
 | `source.zip.url` | 前の版が大きいので URL で渡した（中身は 1 行の URL） | `curl -fsSL "$(cat /workspace/input/source.zip.url)" -o /workspace/input/source.zip` で取得してから上と同じ |
 | `merge-report.json` ほか | 2 つの版を合わせるターン | `$game-merge` に従う |
+| `upstream.json` | このゲームは**派生（リミックス）**で、本流がある | 下の「派生で作るとき」に従う |
 
 - 前の版の `manifest.json` の `sdkVersion` が `1` なら **2 に上げ、`renderer` を書く**（`<kit>/sdk/app-sdk/MIGRATION.md` の「1 → 2」。
   v1 から v2 は追加だけなので、コードの書き換えは要らない）。
@@ -157,6 +158,16 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 - `package.json` の SDK の参照（`file:/workspace/sdk/...`）はそのまま使える（手元では `<kit>/sdk/...` の絶対パスに書き換わっている。§8）。`node_modules` は入っていないので入れ直す。
 - 取得に失敗したら作り直さずにターンを終える（`build-report.json` の `notes` に理由を書き、`outputs/` には何も置かない）。
   前の版を失ったまま別物を作ると、利用者の作品が置き換わってしまう。
+
+**派生で作るとき**（`upstream.json` がある）: この変更はあとで本流へ提案され、本流の変更と合わせられる。
+合わせやすいように、
+
+- **頼まれた変更だけを、必要なファイルだけに**加える。整形し直し・名前の付け替え・並べ替え・「ついでの改善」をしない
+  （関係ない差分は本流と衝突し、提案を読む人にも何が変わったのか分からなくなる）。
+- 掲載情報（`listing/`）は、利用者に頼まれない限り**名前・説明・画像を変えない**（`releaseNotes` だけは書く。`$game-listing`）。
+  本流へ提案するとき、掲載情報は本流のものが使われる。
+- `upstream.json` の `behind` が `true` なら、`build-report.json` の `notes` に「本流に新しい版があります。取り込んでから
+  続けると本流と衝突しにくくなります」と 1 行書く（取り込みは利用者が画面で押す。このターンでは取り込まない）。
 
 ### 4.1 新しく作るとき
 
@@ -324,12 +335,17 @@ GitHub の fork と Pull Request と同じ。**提案を開く・取り下げる
 クライアントが利用者に確認を求める**（Claude Code は毎回。Codex は利用者が `kit.mjs codex-config` の設定を入れていれば）。
 断られたら同じ操作を繰り返さない。
 
+0. **何を直すか**: 決まっていなければ `list_apps_wanting_help()` → `list_discussions({ app_id, help_wanted: true })` から選ぶ
+   （作者が「手を貸してほしい」と出している話題）。提案には 1 つの目的だけを入れ、関係ない差分を作らない。
 1. **リミックス**: `resolve_app({ reference })` → `my_forks` があればそれを使う（新しく fork しない）→
    `remix.allowed` が true なら `remix({ parent_version_id: remix.version_id, request_key })` → 返った `app_id` で §8.3 の 1.。
    `request_key` は新しい UUID（やり直しには同じ値）。false なら `remix.reason` を利用者に伝えて止まる。
 2. **提案する**: 提案できるのは **fork の公開済みの版だけ**（限定公開でよい）。送った変更を公開してもらってから
    `open_proposal({ app_id, title, body })`（版を省くと公開中の版）。未公開なら `fork_not_published` と `editor_url` が返る。
    返事は `get_proposal` で読み、直したら送って公開してもらい `update_proposal({ proposed_version_id })`。
+   応える話題は `discussion_id` に渡す。派生で頼んだ文は既定で提案に添えられる（見せないなら `include_requests: false`）。
+   本流に新しい版が出たら `sync_upstream({ app_id, request_key })` で取り込んでから続ける。
+   返事・マージの結果・本流の新しい版は `list_notifications` で届く（読んだら `mark_notifications_read`）。
 3. **届いた提案**（自分が本流の編集者）: `get_app` の `proposals.incoming_open_count` → `list_proposals` → `get_proposal`。
    中身は `get_proposal_inputs` →
    `kit.mjs review --proposal-id <id> --base-url <base.url または none> --base-sha256 <base.sha256> --ours-url <ours.url> --ours-sha256 <ours.sha256> --theirs-url <theirs.url> --theirs-sha256 <theirs.sha256>`

@@ -8,8 +8,10 @@ description: 自分の game-sns のゲーム（本流）に届いた提案（派
 作業ディレクトリ（本流の `.game-sns.json` のあるところ）で行う。手順・エラーの正本は
 **`<kit>/profile/instructions.md` §8.6**。要点:
 
-1. `get_app({ app_id })` の `proposals.incoming_open_count` → `list_proposals({ app_id, status: "open" })`。
-2. `get_proposal({ proposal_id })`: 説明・マージできるか（`mergeability_current`）・コメント。
+1. `list_notifications({ unread_only: true })` の `proposal_opened` / `proposal_commented`、または
+   `get_app({ app_id })` の `proposals.incoming_open_count` → `list_proposals({ app_id, status: "open" })`。
+2. `get_proposal({ proposal_id })`: 説明・派生で頼んだこと（`requests`）・変更（`change_diff`。行 diff）・
+   マージできるか（`mergeability_current`）・コメント。
 3. 中身を読む: `get_proposal_inputs({ proposal_id })` →
    `node <kit>/scripts/kit.mjs review --proposal-id <id> --base-url <base.url または none> --base-sha256 <base.sha256> --ours-url <ours.url> --ours-sha256 <ours.sha256> --theirs-url <theirs.url> --theirs-sha256 <theirs.sha256>`。
    `review/<id>/changes.json`（提案で変わったファイル・その間に本流で変わったファイル）と `review/<id>/{base,ours,theirs}/` を読み、
