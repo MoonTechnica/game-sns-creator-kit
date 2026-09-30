@@ -25086,6 +25086,17 @@ function validateServerBundle(server, errors3) {
     }
   }
 }
+// frontend/packages/app-validator/src/playtest-video.ts
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+var PLAYTEST_VIDEO = {
+  width: 240,
+  fps: 12,
+  bitrate: "150k",
+  maxBytes: 1024 * 1024
+};
+var run = promisify(execFile);
+
 // frontend/packages/app-validator/src/stub-backend.ts
 var CAPTURE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 // frontend/packages/app-validator/src/import.ts
@@ -40059,6 +40070,7 @@ function agentsMd(kitRoot) {
     "",
     `- \`<kit>\`（Creator Kit の置き場）は \`${kitRoot}\`（\`.game-sns.json\` の \`kit_root\`）。`,
     `- **最初に \`${kitRoot}/profile/instructions.md\` を読み、それに従う**（手元での進め方は同 §8）。`,
+    "- 作り方の工程は `$game-design`（企画と工程）・`$game-art-direction`（見た目の合意と素材の設計）・`$game-playtest`（自分で遊んで確かめる）に従う。",
     "- `$game-controls` と `$game-screen-layout` と `$game-ux`（遊べる体験）と `$game-listing`（掲載情報）は必ず使う。",
     "- `.game-sns.json` は手で書き換えない（`node <kit>/scripts/kit.mjs` が書く）。",
     "",

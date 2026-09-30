@@ -20,6 +20,9 @@
 
 | Skill | いつ |
 |---|---|
+| `$game-design` | **必ず・最初に**。作り方の工程（企画 → 見た目の合意 → 素材の設計 → 核を遊べる形に → 素材 → 遊んで直す → 数値 → 磨く → 掲載）と各段階の完了条件、企画（`design/brief.md`）、ジャンルの下限、ルール（`src/rules.ts`）と調整値（`src/tuning.ts`）の分け方 |
+| `$game-art-direction` | **必ず**（企画の次）。コンセプト画像とスタイルガイド、作る前に利用者へ見せて返すか、素材・生成・描画・3D モデリングのどれで用意するか（`design/asset-manifest.md`） |
+| `$game-playtest` | **必ず**（核が遊べる形になったときと仕上げの前）。自分で遊んで確かめる（ルールの検査・前の版の試遊結果。しっかりした試遊は利用者が頼んだときだけ） |
 | `$game-controls` | **必ず**。PC（キーボード・マウス）とスマホ（画面の操作部・タップ・スワイプ）の両方で遊べる操作を作る。市販のコントローラー（ゲームパッド）はその上乗せで、対応度を `manifest.json` の `gamepad` に書く |
 | `$game-screen-layout` | **必ず**。どの画面の形でも崩れない画面・HUD・タイトル・ポーズ・リザルト。画面の端まで描いて HUD と操作部だけをセーフエリアの内側に置く（`manifest.json` の `safeArea: "app"`。§3.1）。結果を人に見せたくなる遊びならリザルトに「共有」（`app.share.capture` / `app.ui.openShare`） |
 | `$game-ux` | **必ず**。遊べる体験: 最初の 1 手を画面で示す・最初の課題は必ず成功できる、入力への手応え（ヒットストップ・揺れ・パーティクル・音）、読める文字とコントラスト、色だけ・音だけに頼らない、点滅と揺れの上限と reduced-motion、リザルトとすぐの再挑戦、効果音 / BGM の分離ミュートと設定の保存（`app.store`） |
@@ -48,8 +51,9 @@
   利用者が操作や見た目を指定していれば Skill の既定より優先する（ただし PC とスマホの両方で遊べることは守る）。
 - Skill の規則に従ったせいで説明の要求を削った・変えたときは、`build-report.json` の `notes` に
   Skill 名・該当の規則・理由を 1 行で書く。
-- 確かめるのは「ビルドが通る」「`node` で読み込める」「`manifest.json` が仕様どおり」「各 Skill のチェック」まで。
-  テストファイルは書かない。Platform が受け取るのは `outputs/` だけ（会話は届かない）。
+- 確かめるのは「ビルドが通る」「`node` で読み込める」「`manifest.json` が仕様どおり」「ルールの検査が通る（`$game-playtest` §2）」
+  「各 Skill のチェック」。テストファイルは `scripts/playtest-rules.mjs` の 1 本だけにし、実装をなぞるだけのテストは書かない。
+  Platform が受け取るのは `outputs/` だけ（会話は届かない）。
 
 ## 1. 作るもの
 
@@ -94,13 +98,15 @@
 ## 2. 出力（`./outputs/` に置くもの）
 
 **3 つすべてを置く。1 つでも欠けるとジョブは失敗し、作ったものは捨てられる。**
+例外は**企画のターン**（`$game-art-direction` §2 で見た目と遊びの方向を見せて返すとき）だけで、`source.zip`（新しいゲームなら `design/` だけ、前の版があれば前のソース一式 + 更新した `design/`）と
+`build-report.json`（`"stage": "concept"`）の 2 つを置く。企画のターンは版を作らないので、掲載情報（`$game-listing`）も作らない。
 手元では `source.zip` と `dist.tar.gz` は `node <kit>/scripts/kit.mjs pack` が作る（自分で固めない）。`build-report.json` は自分で書く（§8）。
 
 | ファイル | 中身 |
 |---|---|
 | `source.zip` | ソース一式（`node_modules` と `dist` と **`bundles/` の素材**は入れない）。次のターンとリミックスの土台。**掲載情報の `listing/`（`$game-listing`）を必ず含める** |
 | `dist.tar.gz` | **配信用 Artifact**。下の構成を**書庫の根**に置いて固める |
-| `build-report.json` | `{ "manifest": <manifest.json と同じ JSON>, "buildConfig": { ... }, "notes": ["…"], "listingRequested": ["title"] }`（`notes` は実装できなかった要求・Skill と食い違った点・掲載情報を直した理由。無ければ省く。`listingRequested` は利用者が手で直した掲載情報の項目を、依頼どおりに変えたときだけ。`$game-listing` §5） |
+| `build-report.json` | `{ "manifest": <manifest.json と同じ JSON>, "buildConfig": { ... }, "notes": ["…"], "listingRequested": ["title"] }`（`notes` は実装できなかった要求・Skill と食い違った点・掲載情報を直した理由。無ければ省く。`listingRequested` は利用者が手で直した掲載情報の項目を、依頼どおりに変えたときだけ。`$game-listing` §5。利用者が試遊を明確に頼んだときだけ `"playtest": { "level": "thorough" }`。`$game-playtest` §3） |
 
 `dist.tar.gz` の中身（`tar -C dist -czf ../outputs/dist.tar.gz .` 相当。**`dist/` を入れ子にしない**）:
 
@@ -171,6 +177,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 ### 4.1 新しく作るとき
 
+0. `$game-design` の段階 1〜3（企画・見た目の合意・素材の設計）を先に済ませる。
 1. `<kit>/sdk/sample-app/` を土台にして、**同じ構成**（`src/main.ts` / `server/main.ts` /
    `manifest.json` / `package.json` / `build.mjs`）でプロジェクトを作る。
 2. `package.json` の依存は **ローカルパス参照**のまま変えない
@@ -183,7 +190,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
    対戦では、画面（`src/main.ts`）が `server/main.ts` の定義を import して `app.space.join()` に渡す
    （ルールは 1 か所に書き、画面の予測と練習モードも同じ定義を使う）。
 4. ビルドして `dist/` を作り、**実際に動かして確かめる**（`node` で読み込める、構文エラーが無い、
-   `manifest.json` が仕様どおり）。
+   `manifest.json` が仕様どおり、ルールの検査が通る。`$game-playtest`）。
 5. 掲載情報を `listing/` に作る（`$game-listing`。ゲームが出来てから書くと、名前・説明・遊び方・画像が中身と合う）。
 6. `./outputs/` に 3 つのファイルを置く。
 
@@ -210,7 +217,8 @@ Kit には描画と物理の道具が全部入っている。**どれを使う�
 
 ## 5. 絵と音
 
-絵と音の用意は `$game-asset-tools` に従う（画像生成と素材ツール）。
+**何を素材・生成・描画・3D モデリングのどれで用意するか**は `$game-art-direction` §3 の判定表で決め、`design/asset-manifest.md` に理由と一緒に書いてから作る。
+道具の使い方は `$game-asset-tools` に従う（画像生成と素材ツール）。
 素材ツールが無いときは、選んだ道具（Canvas / Phaser / three.js）の描画と Web Audio の合成で作る。
 
 **利用者が用意した素材を先に使う。** `list_assets` の結果で `source: user` の素材は、利用者が上げたもの
@@ -240,7 +248,7 @@ Kit には描画と物理の道具が全部入っている。**どれを使う�
 以下は指示が無くても入れる。
 
 - **PC でもスマホでも最後まで遊べる**（`$game-controls`）。どの画面の形でも崩れない（`$game-screen-layout`）。
-- **始まりと終わりがある**（スコア・勝敗・クリア）。終わったら**もう一度遊べる**。
+- **始まりと終わりがある**（スコア・勝敗・クリア）。終わったら**もう一度遊べる**。ジャンルの下限（`$game-design` references/genres-minimum.md）がそろっている。
 - **遊べる体験にする**（`$game-ux`）: 最初の 1 手を画面で示す・入力に手応えを返す・読める文字・色だけや音だけに頼らない・点滅と揺れの上限・すぐ再挑戦できる。
 - 文言は**日本語**（入力が日本語のため）。
 
@@ -249,10 +257,10 @@ Kit には描画と物理の道具が全部入っている。**どれを使う�
 | 迷い | 決め方 |
 |---|---|
 | ソロか対戦か判断できない | **ソロ**にする（§1） |
-| 入力に無い要素を足したい | 足さない。入力にある遊びを完成させることを優先する |
+| 入力に無い要素を足したい | ジャンルの下限（`$game-design`）は足す。それ以外は足さない（`design/brief.md` の「作らないもの」） |
 | 仕様書と記憶が食い違う | **`<kit>/sdk/*/spec.md` が正本** |
 | 実装できない要求がある（外部通信・保存容量超過など） | 実装できる範囲に落とし、`build-report.json` にそう書く |
-| 絵や音を生成するか描くか | キャラ・背景・効果音・BGM は生成、図形と UI は描く。ツールが無ければ全部描く |
+| 絵や音を素材にするか生成するか描くか | `$game-art-direction` §3 の判定表。ツールが無ければ全部描く |
 | 操作が説明に書かれていない | `$game-controls` の references/genres.md の定番に従う |
 | 手応え（揺れ・点滅・パーティクル）をどれだけ出すか迷う | `$game-ux` の references/feedback.md の量の目安に従う。点滅と揺れの上限（`$game-ux` §5）は超えない |
 | 掲載情報を直すべきか迷う | 遊び方・目的・見た目が変わったときだけ直す。細部の修正では直さない（`$game-listing` §2） |
