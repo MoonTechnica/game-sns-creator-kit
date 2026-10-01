@@ -1,16 +1,16 @@
 {
-  "name": "game-sns",
+  "name": "tokoyo-plugins",
   "owner": {
     "name": "Moon Technica"
   },
   "metadata": {
-    "description": "game-sns のミニゲームを手元の Coding Agent で作る Creator Kit（Skills・SDK・検証器・Platform MCP）"
+    "description": "TOKOYO.games のプラグイン"
   },
   "plugins": [
     {
-      "name": "game-sns",
-      "source": "./plugins/game-sns",
-      "description": "game-sns のミニゲームを手元の Coding Agent で作る Creator Kit（Skills・SDK・検証器・Platform MCP）"
+      "name": "tokoyo-creator",
+      "source": "./plugins/tokoyo-creator",
+      "description": "TOKOYO.games のミニゲームを手元の Coding Agent で作る Creator Kit（Skills・SDK・検証器・Platform MCP）"
     }
   ]
 }

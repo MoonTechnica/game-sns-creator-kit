@@ -1,0 +1,18 @@
+{
+  "name": "tokoyo-creator",
+  "displayName": "TOKOYO.games Creator",
+  "version": "2.2.67bd49d5",
+  "description": "TOKOYO.games のミニゲームを手元の Coding Agent で作る Creator Kit（Skills・SDK・検証器・Platform MCP）",
+  "author": {
+    "name": "Moon Technica"
+  },
+  "homepage": "https://tokoyo.games",
+  "repository": "https://github.com/moontechnica/tokoyo-creator-kit",
+  "license": "MIT-0",
+  "keywords": [
+    "tokoyo",
+    "game",
+    "creator",
+    "mini-game"
+  ]
+}

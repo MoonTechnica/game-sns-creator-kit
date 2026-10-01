@@ -1,14 +1,14 @@
 {
-  "name": "game-sns",
+  "name": "tokoyo-plugins",
   "interface": {
-    "displayName": "game-sns Creator Kit"
+    "displayName": "TOKOYO.games Plugins"
   },
   "plugins": [
     {
-      "name": "game-sns",
+      "name": "tokoyo-creator",
       "source": {
         "source": "local",
-        "path": "./plugins/game-sns"
+        "path": "./plugins/tokoyo-creator"
       },
       "policy": {
         "installation": "AVAILABLE",

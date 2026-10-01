@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tokoyo": {
+      "type": "http",
+      "url": "${GAME_SNS_MCP_URL:-https://tokoyo.games/mcp/creator}",
+      "oauth": { "callbackPort": 43125 }
+    }
+  }
+}
