@@ -116,10 +116,15 @@ server.bundle.js     # 対戦があるときだけ（server/main.ts の defineSp
 manifest.json        # 書庫の根に置く。入れ子にすると取り込みに落とされる
 assets/              # 最初の画面から要る画像・音声・フォント（起動前に全部届く）
 bundles/<名前>/       # 後から取り寄せる素材（ステージ・BGM・3D モデル。`$game-3d-and-bundles`）
+bundle-refs.json     # 台帳から参照する素材の一覧（ビルドが source/bundles.refs.json から作る。手で置かない）
 ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ。`ai/schemas/*.json` も。`$game-ai`）
 ```
 
-- 展開後の合計 **250 MiB**・**2,000 ファイル**・圧縮後 **200 MiB**・**1 ファイル 30 MiB** まで。
+- 合計 **4 GiB**・**20,000 ファイル**・**バンドル 1 つ 256 MiB** まで。そのうち書庫（`dist.tar.gz`）は**圧縮後 200 MiB・展開後 1 GiB・1 ファイル 30 MiB** まで。
+- **大きい素材（1 ファイル数 MiB 以上の音・3D・動画）は書庫に入れず、素材台帳から参照する。** 素材を `upload_asset` / 生成ツールで台帳に載せ、
+  `source/bundles.refs.json` に `{"refs": {"bundles/<名前>/<ファイル>": "<asset_id>"}}` と書く（そのパスのファイルは `dist/` に置かない）。
+  ビルドが `dist/bundle-refs.json` に写し、Platform が台帳の中身を `bundles/` のそのパスで配る。ゲームのコードは書庫のファイルと同じく
+  `app.assets.url('bundles/<名前>/<ファイル>')` で読む。1 つ 256 MiB まで（`$game-3d-and-bundles` §1）。
 - **`bundles/` の外（起動前に全部届く分）は 20 MiB まで**。10 MiB を超えると警告になる
   （スマートフォンの回線で起動を待たせる）。大きい素材は `bundles/` へ。
 - 絶対パス・`..`・シンボリックリンク・同じパスの重複は取り込みで落とされる。
@@ -279,7 +284,7 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 | `.game-sns.json` | `app_id`・`session_id`・`base_revision_id`（取り込んだ版）・`kit_root`（`<kit>`）ほか。手で書き換えない |
 | `source/` | 作るプロジェクト（`source.zip` の中身）。`package.json` の SDK の参照は `file:<kit>/sdk/<pkg>` の絶対パス。Skill や §4 に `file:/workspace/sdk/<pkg>` とあれば `<kit>` の実パスに読み替える（`pack` が `/workspace` の形へ戻す） |
 | `input/` | マージの材料（`merge-report.json` ほか）。`$game-merge` が読む |
-| `assets-cache/` | 素材ツールの `download_url` から取った素材。使うものを `source/assets/` か `source/bundles/` へコピーする（素材の `suggested_path` は `source/` からの相対） |
+| `assets-cache/` | 素材ツールの `download_url` から取った素材。小さいものは `source/assets/` か `source/bundles/` へコピーする（素材の `suggested_path` は `source/` からの相対）。大きいものはコピーせず `source/bundles.refs.json` で参照する（§2） |
 | `outputs/` | 送る 3 つ（§2） |
 | `review/` | 届いた提案を読むための版（`kit.mjs review`。§8.6）。送らない |
 

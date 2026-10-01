@@ -40,6 +40,26 @@ app.bundles.unload('stage2')
 - `source.zip` に `bundles/` の素材を入れない。次のターンは `list_assets` から取り直す
   （自分で作った音・GLB は `upload_asset` で登録する。`$game-asset-tools` §4）。
 
+### 大きい素材は台帳から参照する（書庫に入れない）
+
+書庫（`dist.tar.gz`）は圧縮後 200 MiB・1 ファイル 30 MiB まで。それより大きいゲーム（合計 4 GiB まで）は、大きい素材を
+**素材台帳に置いたまま参照**する。
+
+1. 素材を台帳に載せる（生成ツール、または自分で作ったものは `upload_asset` → `upload_url` へ PUT → `get_asset`）。1 つ 256 MiB まで
+2. `source/bundles.refs.json` に、配りたいパスと `asset_id` を書く
+
+   ```json
+   { "refs": { "bundles/stage2/boss.glb": "<asset_id>", "bundles/movie/intro.mp4": "<asset_id>" } }
+   ```
+
+3. **そのパスのファイルは `dist/` に置かない**（置くと取り込みで `DUPLICATE_ENTRY`）。バンドル名は `manifest.json` の `bundles` に宣言する
+4. ゲームのコードは書庫のファイルと同じく `app.assets.url('bundles/stage2/boss.glb')`（`await app.bundles.load('stage2')` の後）
+
+- 参照だけでできたバンドルも作れる。宣言した名前のディレクトリが `dist/bundles/` に無くてよい
+- 書けるのは `asset_id` だけ。sha256・大きさは Platform が台帳から埋める。違う App の ID・まだ `ready` でない ID は取り込みで `ASSET_REF_INVALID`
+- リミックス元の ID が残っていても、同じ中身がこの App の台帳に写されていれば通る（リミックスは親の素材を台帳へ写す）
+- 手元の `kit.mjs check` は参照の中身を確かめられない（`LEDGER_NOT_CHECKED` の警告）。中身は push 後の Platform の検証が確かめる
+
 ## 2. 3D（Kit の three.js）
 
 - `package.json` に `"three": "file:/workspace/sdk/node_modules/three"`（`dependencies`）と

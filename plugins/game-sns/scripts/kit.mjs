@@ -23732,14 +23732,18 @@ function date4(params) {
 config(en_default());
 // frontend/packages/app-protocol/src/limits.ts
 var ARTIFACT_ARCHIVE_MAX_BYTES = 200 * 1024 * 1024;
-var ARTIFACT_MAX_BYTES = 250 * 1024 * 1024;
+var ARTIFACT_MAX_BYTES = 4 * 1024 * 1024 * 1024;
+var ARTIFACT_ARCHIVE_UNPACKED_MAX_BYTES = 1024 * 1024 * 1024;
 var ARTIFACT_FILE_MAX_BYTES = 30 * 1024 * 1024;
-var ARTIFACT_MAX_FILES = 2000;
+var ARTIFACT_MAX_FILES = 20000;
+var ARTIFACT_LEDGER_FILE_MAX_BYTES = 256 * 1024 * 1024;
 var ARTIFACT_INITIAL_MAX_BYTES = 20 * 1024 * 1024;
 var ARTIFACT_INITIAL_WARN_BYTES = 10 * 1024 * 1024;
 var ARTIFACT_MEMORY_WARN_BYTES = 512 * 1024 * 1024;
 var ARTIFACT_MEMORY_STRONG_WARN_BYTES = 768 * 1024 * 1024;
-var ARTIFACT_MAX_BUNDLES = 64;
+var ARTIFACT_MAX_BUNDLES = 512;
+var ARTIFACT_BUNDLE_MAX_BYTES = 256 * 1024 * 1024;
+var ARTIFACT_WIFI_NOTICE_BYTES = 200 * 1024 * 1024;
 var BUNDLE_HINT_MAX_NAMES = 8;
 var STORE_MAX_BYTES = 1024 * 1024;
 var SPACE_MESSAGE_MAX_BYTES = 4 * 1024;
@@ -24046,7 +24050,11 @@ var artifactIndexSchema = exports_external.strictObject({
     path: artifactPathSchema,
     sha256: exports_external.string().regex(SHA256_HEX),
     size: exports_external.int().min(0),
-    mime: exports_external.string().regex(/^[\w.+-]+\/[\w.+-]+$/, "must be a MIME type")
+    mime: exports_external.string().regex(/^[\w.+-]+\/[\w.+-]+$/, "must be a MIME type"),
+    source: exports_external.literal("ledger").optional(),
+    assetId: exports_external.uuid().optional()
+  }).refine((file2) => file2.source === undefined === (file2.assetId === undefined), {
+    message: "source and assetId go together"
   })).min(1)
 });
 // frontend/packages/app-protocol/src/bundles.ts
@@ -24097,6 +24105,13 @@ function planBundles(manifest, files) {
         severity: "error",
         message: `bundle "${name}" is declared but ${BUNDLES_DIR}/${name}/ has no files`
       });
+    } else if (bundle.size > ARTIFACT_BUNDLE_MAX_BYTES) {
+      findings.push({
+        code: "BUNDLE_TOO_LARGE",
+        severity: "error",
+        message: `bundle "${name}" totals ${bundle.size} bytes (max ${ARTIFACT_BUNDLE_MAX_BYTES}); split it into smaller bundles`,
+        path: `${BUNDLES_DIR}/${name}/`
+      });
     }
   }
   if (manifest.entrypoint.split("/")[0] === BUNDLES_DIR) {
@@ -24122,6 +24137,16 @@ function planBundles(manifest, files) {
   }
   return { plan: { initial, bundles }, findings };
 }
+
+// frontend/packages/app-protocol/src/bundle-refs.ts
+var BUNDLE_REFS_PATH = "bundle-refs.json";
+var bundledPathSchema = artifactPathSchema.refine((path) => {
+  const segments = path.split("/");
+  return segments.length >= 3 && segments[0] === BUNDLES_DIR;
+}, { message: `a referenced file must be under ${BUNDLES_DIR}/<name>/` });
+var bundleRefsSchema = exports_external.strictObject({
+  refs: exports_external.record(bundledPathSchema, exports_external.uuid())
+});
 // frontend/packages/app-protocol/src/errors.ts
 var ERROR_CODES = [
   "UNAUTHORIZED",
@@ -25278,13 +25303,13 @@ function assertSafePath(path) {
     throw new ImportError("EMPTY_SEGMENT", `empty path segment: ${path}`);
   }
 }
-async function importArtifact(archive) {
+async function importArtifact(archive, ledger = []) {
   if (archive.byteLength > ARTIFACT_ARCHIVE_MAX_BYTES) {
     throw new ImportError("ARCHIVE_TOO_LARGE", `the archive is ${archive.byteLength} bytes (max ${ARTIFACT_ARCHIVE_MAX_BYTES})`);
   }
   let tar;
   try {
-    tar = archive[0] === 31 && archive[1] === 139 ? new Uint8Array(gunzipSync(archive, { maxOutputLength: ARTIFACT_MAX_BYTES })) : archive;
+    tar = archive[0] === 31 && archive[1] === 139 ? new Uint8Array(gunzipSync(archive, { maxOutputLength: ARTIFACT_ARCHIVE_UNPACKED_MAX_BYTES })) : archive;
   } catch (cause) {
     throw new ImportError("UNREADABLE_ARCHIVE", `could not decompress the archive: ${cause}`);
   }
@@ -25319,8 +25344,8 @@ async function importArtifact(archive) {
       throw new ImportError("FILE_TOO_LARGE", `${path} is ${bytes.byteLength} bytes (max ${ARTIFACT_FILE_MAX_BYTES} per file)`);
     }
     totalBytes += bytes.byteLength;
-    if (totalBytes > ARTIFACT_MAX_BYTES) {
-      throw new ImportError("ARTIFACT_TOO_LARGE", `the artifact exceeds ${ARTIFACT_MAX_BYTES} bytes once unpacked`);
+    if (totalBytes > ARTIFACT_ARCHIVE_UNPACKED_MAX_BYTES) {
+      throw new ImportError("ARTIFACT_TOO_LARGE", `the archive exceeds ${ARTIFACT_ARCHIVE_UNPACKED_MAX_BYTES} bytes once unpacked; reference large assets from the ledger`);
     }
     if (files.length >= ARTIFACT_MAX_FILES) {
       throw new ImportError("TOO_MANY_FILES", `the artifact has more than ${ARTIFACT_MAX_FILES} files`);
@@ -25330,9 +25355,73 @@ async function importArtifact(archive) {
   if (files.length === 0) {
     throw new ImportError("EMPTY_ARTIFACT", "the archive contains no files");
   }
+  totalBytes += await admitLedger(files, ledger === "unresolved" ? await placeholdersFor(files) : ledger, totalBytes);
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   const artifactHash = await computeArtifactHash(files);
   return { files, artifactHash, totalBytes };
+}
+async function placeholdersFor(files) {
+  const refsFile = files.find((file2) => file2.path === BUNDLE_REFS_PATH);
+  if (!refsFile)
+    return [];
+  const parsed = bundleRefsSchema.safeParse((() => {
+    try {
+      return JSON.parse(new TextDecoder().decode(refsFile.bytes));
+    } catch {
+      return null;
+    }
+  })());
+  if (!parsed.success)
+    return [];
+  const empty = new Uint8Array(0);
+  const sha256 = await hashArtifactFile(empty);
+  return Object.keys(parsed.data.refs).map((path) => ({ path, sha256, size: 0, bytes: empty }));
+}
+async function admitLedger(files, ledger, totalBefore) {
+  const refsFile = files.find((file2) => file2.path === BUNDLE_REFS_PATH);
+  let referenced = [];
+  if (refsFile) {
+    let parsed;
+    try {
+      parsed = JSON.parse(new TextDecoder().decode(refsFile.bytes));
+    } catch (cause) {
+      throw new ImportError("BUNDLE_REFS_INVALID", `${BUNDLE_REFS_PATH} is not JSON: ${cause}`);
+    }
+    const refs = bundleRefsSchema.safeParse(parsed);
+    if (!refs.success) {
+      throw new ImportError("BUNDLE_REFS_INVALID", `${BUNDLE_REFS_PATH}: ${refs.error.message}`);
+    }
+    referenced = Object.keys(refs.data.refs).sort();
+  }
+  const given = ledger.map((file2) => file2.path).sort();
+  if (referenced.join(`
+`) !== given.join(`
+`)) {
+    throw new ImportError("LEDGER_MISMATCH", `the archive references ${referenced.length} ledger files but ${given.length} were given`);
+  }
+  let added = 0;
+  const seen = new Set(files.map((file2) => file2.path));
+  for (const file2 of ledger) {
+    if (seen.has(file2.path)) {
+      throw new ImportError("DUPLICATE_ENTRY", `${file2.path} is both in the archive and referenced`);
+    }
+    if (file2.bytes.byteLength > ARTIFACT_LEDGER_FILE_MAX_BYTES) {
+      throw new ImportError("FILE_TOO_LARGE", `${file2.path} is ${file2.bytes.byteLength} bytes (max ${ARTIFACT_LEDGER_FILE_MAX_BYTES})`);
+    }
+    if (await hashArtifactFile(file2.bytes) !== file2.sha256) {
+      throw new ImportError("HASH_MISMATCH", `${file2.path} does not match the ledger's sha256`);
+    }
+    added += file2.bytes.byteLength;
+    if (totalBefore + added > ARTIFACT_MAX_BYTES) {
+      throw new ImportError("ARTIFACT_TOO_LARGE", `the artifact exceeds ${ARTIFACT_MAX_BYTES} bytes with its referenced assets`);
+    }
+    files.push({ ...file2, size: file2.bytes.byteLength });
+  }
+  if (files.length > ARTIFACT_MAX_FILES) {
+    throw new ImportError("TOO_MANY_FILES", `the artifact has more than ${ARTIFACT_MAX_FILES} files`);
+  }
+  files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  return added;
 }
 // frontend/node_modules/property-graph/dist/index.mjs
 var EventDispatcher = class {
@@ -39211,13 +39300,13 @@ async function estimateMemory(manifest, files) {
   return { estimate: { initial, bundles, groups, peak }, findings };
 }
 // frontend/packages/app-validator/src/validate.ts
-async function validateArchive(archive, options = {}) {
+async function validateArchive(archive, options = {}, ledger = []) {
   const stages = [];
   const importStage = startStage("import");
   let files;
   let artifactHash;
   try {
-    const imported = await importArtifact(archive);
+    const imported = await importArtifact(archive, ledger);
     files = imported.files;
     artifactHash = imported.artifactHash;
   } catch (error51) {
@@ -39225,7 +39314,13 @@ async function validateArchive(archive, options = {}) {
     stages.push(importStage.finish("failed", { errors: [finding] }));
     return { report: buildReport({ artifactHash: null, files: [], stages }) };
   }
-  stages.push(importStage.finish("passed"));
+  const notChecked = ledger === "unresolved" && files.some((file2) => file2.path === BUNDLE_REFS_PATH) ? [
+    {
+      code: "LEDGER_NOT_CHECKED",
+      message: "referenced assets (bundle-refs.json) are checked by the Platform after the push, not here"
+    }
+  ] : [];
+  stages.push(importStage.finish("passed", { warnings: notChecked }));
   const reportFiles = files.map((file2) => ({
     path: file2.path,
     sha256: file2.sha256,
@@ -39260,7 +39355,7 @@ async function validateArchive(archive, options = {}) {
 }
 // frontend/packages/creator-kit/src/check.ts
 async function checkDist(archive) {
-  const { report } = await validateArchive(archive);
+  const { report } = await validateArchive(archive, {}, "unresolved");
   return { passed: report.passed, summary: summarize(report), report };
 }
 function summarize(report) {
