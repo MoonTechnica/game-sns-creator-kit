@@ -1,6 +1,6 @@
 ---
 name: game-documents
-description: 相手と同時にいなくても進むゲーム（非同期対戦）と、複数の人が時間をまたいで持つ場を作る。manifest の documentSchema の決め方（コレクション・members・write の owner / member / turn・read・join の invite / open・maxBytes・ttlDays）、手番制の書き方、REVISION_CONFLICT の読み直し、onChange と保険ポーリング、招待とマッチング（joinOpen → 無ければ create）、決着（finish）の後、秘密の情報を場に置かないこと、勝敗が対戦成績に入らないこと、匿名の人の扱いを扱う。遊びの説明に「通信対局」「1 日 1 手」「交代で」「相手の番」「攻め合い」「友達の記録に挑戦」「みんなで育てる世界」などがあるときに使う。async multiplayer, turn-based, correspondence, play by mail, shared world.
+description: 相手と同時にいなくても進むゲーム（非同期対戦）と、時間をまたいで複数の人が持つ場を作る（app.documents）。documentSchema の決め方（members・write・read・join・maxBytes・ttlDays）、手番制、REVISION_CONFLICT の読み直し、onChange、招待とマッチング、決着（finish）、秘密を場に置かないこと、匿名の人の扱いを扱う。遊びの説明に「通信対局」「1 日 1 手」「交代で」「攻め合い」「友達の記録に挑戦」「みんなで育てる世界」などがあるときに使う。async multiplayer, turn-based, correspondence, shared world.
 ---
 
 # 非同期対戦と共有の場（`app.documents`）
@@ -31,7 +31,7 @@ Platform が守るのは「誰が読めるか・書けるか」「形（Schema�
 | 項目 | 決め方 |
 |---|---|
 | コレクション名 | 英小文字（`matches` / `raids` / `worlds`）。`^[a-z][a-z0-9_]{0,31}$` |
-| `fields` | `storeSchema` と同じ型（`number` / `string` / `boolean` / `json`）と既定値。盤や世界のように形が込み入るものは `json` にして、**読むときに画面で形を確かめる**（§4） |
+| `fields` | `storeSchema` と同じ型（`string` / `number` / `boolean` / `object` / `array` / `blob`）か `json`（形を縛らない）と既定値。盤や世界のように形が込み入るものは `json` にして、**読むときに画面で形を確かめる**（§4）。**`create` / `update` で書くキーは全部ここに宣言する**（宣言していないキーは `INVALID_ACTION`。決着の `winner` も） |
 | `members` | 遊べる人数（1〜8）。`min` がそろうまで `open`（募集中）、そろうと `active` |
 | `roles` | 先手・後手のように役割の名前が遊びに要るときだけ。無ければ**席番号（1 起点）**で区別する |
 | `write` | `turn`（手番の席の人だけ。ターン制）/ `member`（誰でも。既定）/ `owner`（作った人だけ） |
@@ -62,8 +62,8 @@ Platform が守るのは「誰が読めるか・書けるか」「形（Schema�
   `write: "member"` の形では、**他の人のキーに触れない patch** にすれば衝突しても読み直して同じ patch を送れる。
 - `requestId` は省いてよい（SDK が振り、届かなければ同じ id で送り直す）。
 - 書く回数は**毎分 30 回まで**（`RATE_LIMITED`）。ドラッグ中などに書かない。手を確定したときだけ書く。
-- 場を作るのは**毎時 30 回・同時に 20 件まで**（`QUOTA_EXCEEDED`）。上限に当たったら「終わった対局を片付けてください」と
-  自分の一覧を出す（`leave` で抜けられる）。
+- 場を作るのは**毎時 30 回まで**（超えると `RATE_LIMITED`。少し待って作り直す）、**参加中の場は同時に 20 件まで**（超えると `QUOTA_EXCEEDED`）。
+  `QUOTA_EXCEEDED` なら「終わった対局を片付けてください」と自分の一覧を出す（`leave` で抜けられる）。
 
 ## 4. 変化を知る（`onChange`）と起動
 
@@ -110,6 +110,7 @@ Platform が守るのは「誰が読めるか・書けるか」「形（Schema�
 
 - [ ] `manifest.json` に `documentSchemaVersion` / `documentSchema` と `documents.read` / `documents.write`、`sdkVersion: 2`
 - [ ] 手番制なら `fields.turn` があり、1 回の `update` で `turn` を相手の席に変えている
+- [ ] `create` / `update` で書くキー（`winner` など）が全部 `fields` に宣言してある
 - [ ] 書くたびに `expectedRevision` を渡し、`REVISION_CONFLICT` で読み直している
 - [ ] 起動時に `launchRecordId()` を見ている。`onChange` で読み直し、自前のポーリングが無い
 - [ ] `joinOpen` が `null` のとき `create` している。匿名の `FORBIDDEN` を案内している

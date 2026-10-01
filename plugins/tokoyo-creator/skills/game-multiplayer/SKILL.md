@@ -9,7 +9,7 @@ description: 2〜8 人のオンライン対戦のゲーム（manifest の space 
 
 | ファイル | 中身 | 動く場所 |
 |---|---|---|
-| `server/main.ts` → `server.bundle.js` | **ルール**（状態・入力・1 tick の計算・参加 / 離脱・決着）。`defineSpace({ … })` を `export default` | Platform の対戦サーバー。練習モードでは画面の中 |
+| `server/main.ts` → `server.bundle.js` | **ルールを Platform につなぐ定義**（状態・入力・1 tick の計算・参加 / 離脱・決着）。`defineSpace({ … })` を `export default`。手番・勝敗の判定・1 tick の計算そのものは `src/rules.ts` の純粋な関数に書いて呼ぶ（`$game-design` §3。`$game-playtest` のルール検査がそのまま回せる） | Platform の対戦サーバー。練習モードでは画面の中 |
 | `src/main.ts` → `app.bundle.js` | 画面。**同じ定義を import して** `app.space.join(definition)` に渡し、届いた `state` を描く | ブラウザ |
 
 **API の正本は `<kit>/sdk/app-server-sdk/spec.md`（定義）と `<kit>/sdk/app-sdk/spec.md` §3.3（画面）**。先に読む。
@@ -29,7 +29,8 @@ description: 2〜8 人のオンライン対戦のゲーム（manifest の space 
   配列・Map は `t.array('uint8')` / `t.map(Player)` のように書く（数値の配列は型名の文字列）。
 - 決着したら `ctx.finish({ outcomes, ranks? })` を **1 回だけ**呼ぶ。全員の slot に結果を入れる。
   3 人以上なら `ranks`（1 位が 1、同順位あり）も入れる。呼ばないと時間切れで結果が残らない。
-- **時間切れを自分で持つ**: `maxDurationSec` より前に `ctx.elapsedMs` を見て判定勝ち・引き分けにする。
+- **時間切れを自分で持つ**: 残り時間を状態に持ち（`timeLeftMs`）、`step` で `ctx.dt` ずつ減らして、`maxDurationSec` より前に
+  0 になったら判定勝ち・引き分けにする（`ctx.elapsedMs` は表示用。`step` の計算に使うと画面の予測とずれる）。
 - `step` は `ctx.dt` と入力だけで決まる計算にする（`Date.now()` / `Math.random()` / `performance` を読まない）。
   画面の予測と練習モードも同じ `step` を呼ぶので、ずれると動きがガタつく。乱数が要るなら状態に種を持って自前の擬似乱数で進める。
 - `slot` は **1 起点**。`0` は「誰でもない」（空きマス・勝者なし）の意味にだけ使う。
@@ -135,6 +136,7 @@ export default defineSpace({
 
 物理で動く対戦（押し合い・玉転がし・車・積み崩し）は、対戦サーバーでも同梱の Rapier を使える
 （`@dimforge/rapier3d-compat` / `rapier2d-compat`。**対戦サーバーは Kit と同じ版を持ち、`init()` も済ませてある**）。
+**画面の中（予測・練習モード）は `init()` されていない**ので、画面は `app.space.join` の前に `await RAPIER.init()` する（§5）。
 書き方の正本は `$game-physics`（同じ結果になる 5 つの規則）。対戦で守ることはこれだけ:
 
 ```ts
@@ -208,7 +210,13 @@ export default defineSpace({
 import { app } from '@workspace/app-sdk'
 import definition, { move } from '../server/main'
 
-const session = await app.space.join(definition)   // 席が用意されるまで待つ
+async function start() {
+  // await RAPIER.init()                            // 定義が Rapier を使うなら join の前に（§2.4）
+  const session = await app.space.join(definition)  // 席が用意されるまで待つ
+  session.onChange(draw)
+}
+
+start().catch((error: unknown) => showError(error))
 ```
 
 - **`app.space.mode()` で分岐**: `online`（対戦）/ `practice`（練習）/ `null`（Space 無し。ソロの App か、ソロと対戦の両方を持つ App のソロ側）。
@@ -258,7 +266,8 @@ const session = await app.space.join(definition)   // 席が用意されるま�
 
 ## 8. 出力前のチェック
 
-- [ ] `server/main.ts` が `export default defineSpace({ … })` で、`@workspace/app-server-sdk` 以外を import していない
+- [ ] `server/main.ts` が `export default defineSpace({ … })` で、外部パッケージは `@workspace/app-server-sdk` と Rapier（§2.4）だけを import している（自分の `src/rules.ts`・`src/tuning.ts` は import してよい。DOM・SDK に触れないこと）
+- [ ] 定義が Rapier を使うなら、画面が `app.space.join` の前に `await RAPIER.init()` している（練習モード・予測が落ちる）
 - [ ] Space ごとの値が `ctx.state`（か `ctx.state` をキーにした `WeakMap`）にあり、モジュールの変数に無い
 - [ ] schema の数値・真偽値・文字列の欄に `.default(…)` がある
 - [ ] 勝敗は定義だけが決め、`finish` は 1 回だけ・全員の slot に結果が入る（3 人以上は `ranks` も）

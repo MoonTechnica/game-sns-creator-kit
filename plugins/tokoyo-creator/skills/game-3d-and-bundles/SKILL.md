@@ -20,16 +20,19 @@ description: 3D のゲーム（同梱の three.js の WebGPURenderer。WebGPU �
 ```
 
 ```ts
-import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
-// background でも、使う前に必ず load する（裏での取得が終わっている保証は無い）
-await app.bundles.load('stage2', { onProgress: (loaded, total) => drawBar(loaded / total) })
-const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/stage2/map.glb'))
-scene.add(gltf.scene)
+async function enterStage2() {
+  // background でも、使う前に必ず load する（裏での取得が終わっている保証は無い）
+  await app.bundles.load('stage2', { onProgress: (loaded, total) => drawBar(loaded / total) })
+  const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/stage2/map.glb'))
+  scene.add(gltf.scene)
+}
 
 // そのステージを抜けたら、three.js の資源を dispose() してからバンドルを解放する
-app.bundles.unload('stage2')
+function leaveStage2() {
+  app.bundles.unload('stage2')
+}
 ```
 
 - 読み込み中は進み具合を画面に出す（止まって見える時間を作らない）。`load` の失敗は `SdkError`。
@@ -65,8 +68,8 @@ app.bundles.unload('stage2')
 - `package.json` に `"three": "file:/workspace/sdk/node_modules/three"`（`dependencies`）と
   `"@types/three": "file:/workspace/sdk/node_modules/@types/three"`（`devDependencies`）を足す（Kit の lockfile で入っている版）。
   `tsc` で型を確かめるなら `tsconfig.json` に `"skipLibCheck": true`。
-- `import` できる外部パッケージは `three` と `three/addons/*` だけ（build-config が Kit の three に解決する）。
-  `three/src/*` や他のパッケージは解決できずビルドが失敗する。
+- three.js で `import` できるのは `three/webgpu`・`three/tsl`・`three/addons/*`（と `three`）だけ（build-config が Kit の three に解決する）。
+  `three/src/*` は解決できずビルドが失敗する。three.js のほかに入れられるのは Kit の phaser・Rapier だけ（`app-sdk/spec.md` §5）。
 - 3D の形式は **GLB 1 本**（`.gltf` + `.bin` の分割・Draco は使えない）。テクスチャは **KTX2**（下の「WebGPU と KTX2」）。
   `EXT_meshopt_compression` の GLB は読める。そのときは
   `import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'` を
@@ -74,7 +77,7 @@ app.bundles.unload('stage2')
 - 画面は全面（`$game-screen-layout` §1 の three.js の行）。`app.lifecycle.onPause` で
   `renderer.setAnimationLoop(null)` にして止める。
 - 操作は `$game-controls` の references/genres.md §10（左のスティックで移動、右半分のドラッグでカメラ。
-  マウスの固定は使えない）。
+  マウスで視点を回す遊びは `$game-controls` の「マウス固定」）。
 - 生成モデルが無い・枠が無いときは、three.js の基本形状（Box / Sphere / Capsule）とマテリアルの色で作る。
   それでも遊べるゲームにする。
 

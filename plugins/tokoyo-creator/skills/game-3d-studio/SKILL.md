@@ -10,8 +10,8 @@ three.js のコードで組める形（箱・球・床・パーティクル）�
 
 手元の Blender（4.5 LTS 以上。無ければ blender.org から無料で入る）を
 `blender -b --factory-startup -Y --python-exit-code 1 -P art/3d/<name>.py` で動かす。
-書き出した GLB は `upload_asset`（`model_3d`）、PNG は `upload_image` で素材に登録する。
-Blender が無く、利用者が入れない場合は 3D スタジオを使わずに作る（コードのジオメトリ・フリー素材・`generate_model_3d`）。
+書き出した GLB は `upload_asset`（`model_3d`。持ち込みの枠なので 3D 生成が閉じていても登録できる）、PNG は `upload_image` で素材に登録する。
+Blender が無く、利用者が入れない場合は 3D スタジオを使わずに作る（コードのジオメトリ。ツール一覧にあれば 3D のフリー素材・`generate_model_3d`）。
 
 ## 1. スクリプトはソースに置く
 
@@ -59,6 +59,7 @@ Blender が無く、利用者が入れない場合は 3D スタジオを使わ�
 ### 4.3 リグとアニメーション
 
 - 人型は、フリー素材の Quaternius UAL（`search_stock_assets` で `universal animation`）の骨格とクリップに合わせるのが早い。
+  ただし **3D のフリー素材は 3D の枠が開くまで取り込めない**（`TOOL_NOT_ALLOWED`。`$game-asset-tools` §3.5）。そのときは次の手順で自分で骨を付ける。
 - 自分のメッシュに骨を付けるときは、骨を編集モードで作り、メッシュ → 骨の順に選んで
   `parent_set(type="ARMATURE_AUTO")`（自動ウェイト）。頂点グループが骨の数だけできたか確かめる。
 - キーフレームは `pose.bones[<名前>].keyframe_insert(...)`。1 アクションずつ NLA トラックへ。
@@ -69,7 +70,7 @@ Blender が無く、利用者が入れない場合は 3D スタジオを使わ�
 そのままではゲームに入らない（配信物に FBX は入れられない）。ゲームで一般的な流れのとおり、
 **キャラの骨格に移して、キャラの GLB のクリップとして書き出す**。
 
-1. 付け先のキャラを決める: リグ付きの GLB（フリー素材の UAL のキャラ・前に作ったキャラ）。
+1. 付け先のキャラを決める: リグ付きの GLB（前に作ったキャラ・取り込めるならフリー素材の UAL のキャラ）。
    リグの無いメッシュ（`generate_model_3d` の結果など）は、先に §4.3 で骨を付ける。
 2.    キャラは `import_scene.gltf`、モーションは `import_scene.fbx(filepath=..., automatic_bone_orientation=True)` で読む。
    `generate_motion` の FBX は SMPL-H 骨格（体の 22 関節）。

@@ -4,7 +4,7 @@
 `<kit>/sdk/` に展開された SDK パッケージの中にあり、**そちらが正本**。
 ここは「どれを、どの順に読むか」だけを示す。
 
-Platform 側の対応行は `generation_profiles(kind='game', sdk_version=1)`
+Platform 側の対応行は `generation_profiles(kind='game', sdk_version=2)`
 （`spec_key` = この文書、`instructions_key` = `instructions.md`）。
 
 ## 1. 置かれているもの
@@ -34,11 +34,17 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=1)`
 │   ├── spec.md              # この文書
 │   └── instructions.md      # 作業手順と出力の約束
 ├── skills/                  # Agent Skills（名前と説明が最初から見えている。`$<名前>` で使う）
+│   ├── game-design/         # 工程の正本（企画 brief・段階と完了条件・ジャンルの下限・rules.ts / tuning.ts）
+│   ├── game-art-direction/  # 見た目の合意（コンセプト画像・スタイルガイド・素材の判定表）
+│   ├── game-playtest/       # 自分で遊んで確かめる（rubric・ルール検査 assets/playtest-rules.mjs・前の版の試遊結果）
 │   ├── game-controls/       # PC とスマホの操作（入力キット assets/input.ts・ジャンル別の割り当て）
 │   ├── game-screen-layout/  # 画面の追従・HUD・タイトル / ポーズ / リザルト
 │   ├── game-asset-tools/    # 画像生成と素材ツール（MCP）
 │   ├── game-phaser/         # 同梱の Phaser 4 で 2D を作るときの決まり（素材・入力・画面・物理）
-│   ├── game-3d-and-bundles/ # three.js・バンドルの分割・メモリ
+│   ├── game-3d-and-bundles/ # three.js・バンドルの分割・台帳からの参照・メモリ
+│   ├── game-3d-studio/      # Blender で 3D の素材を作る（モデリング・リグ・リターゲット・3D から 2D）
+│   ├── game-physics/        # 同梱の Rapier（決定版）で物理
+│   ├── game-open-world/     # 広い世界（チャンク・seed・地域ごとのバンドル）
 │   ├── game-multiplayer/    # オンライン対戦（2〜8 人・役割・予測・練習モード）
 │   ├── game-leaderboard/    # ランキング（ボードの決め方・送る瞬間・順位表の表示）
 │   ├── game-documents/      # 非同期対戦・共有の場（Schema・手番・衝突・招待とマッチング）
@@ -46,7 +52,7 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=1)`
 │   ├── game-ux/             # 遊べる体験（最初の 1 手・手応え・読める文字・点滅と揺れの上限・再挑戦・設定の保存）
 │   ├── game-listing/        # 公開ページの掲載情報（名前・説明・遊び方・ジャンル・タグ・アイコン・カバー）
 │   └── game-merge/          # 2 つの版を合わせる（マージ）
-├── input/                   # 前の版・今の掲載情報（listing.json）・マージの材料（instructions.md §4.0）
+├── input/                   # 前の版・今の掲載情報（listing.json）・前の版の試遊の結果（playtest-report.json）・派生の本流（upstream.json）・マージの材料（instructions.md §4.0）
 └── outputs/                 # ここに置いたものだけが Platform に渡る
 ```
 

@@ -9340,7 +9340,11 @@ var COMMANDS = {
     optional: ["head-revision-id", "mcp-url"],
     switches: []
   },
-  pull: { required: ["url", "sha256", "revision-id"], optional: [], switches: [] },
+  pull: {
+    required: ["url", "sha256", "revision-id"],
+    optional: ["playtest-url", "playtest-shots"],
+    switches: []
+  },
   "merge-inputs": {
     required: ["base-url", "ours-url", "theirs-url", "theirs-revision-id", "title"],
     optional: MERGE_OPTIONAL,
@@ -39695,7 +39699,7 @@ function premerge(inputs) {
     const git = new Git(scratch);
     const baseCommit = git.commit(treeOf(git, inputs.base, "base"));
     const oursCommit = git.commit(treeOf(git, inputs.ours, "ours"));
-    const theirsCommit = git.commit(treeOf(git, inputs.theirs, "theirs"));
+    const theirsCommit = git.commit(treeOf(git, withListingOf(inputs.theirs, inputs.ours), "theirs"));
     const merged = git.mergeTree(baseCommit, oursCommit, theirsCommit);
     const conflicts = conflictsOf(merged);
     return {
@@ -39708,12 +39712,18 @@ function premerge(inputs) {
     rmSync(scratch, { recursive: true, force: true });
   }
 }
+var LISTING_DIR = "listing";
+var DIFF_EXCLUDES = [`:(exclude)${LISTING_DIR}`, ":(exclude)bundles"];
+var inListing = (file2) => file2.path.startsWith(`${LISTING_DIR}/`);
+function withListingOf(theirs, ours) {
+  return [...readZip(theirs).filter((file2) => !inListing(file2)), ...readZip(ours).filter(inListing)];
+}
 function treeOf(git, archive, name) {
   if (archive === null)
     return git.emptyTree();
   const workdir = join(git.root, name);
   mkdirSync(workdir);
-  for (const file2 of readZip(archive)) {
+  for (const file2 of Array.isArray(archive) ? archive : readZip(archive)) {
     const target = join(workdir, ...file2.path.split("/"));
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, file2.bytes);
@@ -39770,7 +39780,18 @@ class Git {
     return parseMergeTree(new TextDecoder().decode(output));
   }
   changes(base, theirs) {
-    const output = new TextDecoder().decode(this.run(["diff-tree", "-r", "-z", "--no-renames", "--name-status", base, theirs]));
+    const output = new TextDecoder().decode(this.run([
+      "diff-tree",
+      "-r",
+      "-z",
+      "--no-renames",
+      "--name-status",
+      base,
+      theirs,
+      "--",
+      ".",
+      ...DIFF_EXCLUDES
+    ]));
     const statuses = output.split("\x00").filter((_token, index) => index % 2 === 0);
     return {
       added: statuses.filter((status) => status === "A").length,
@@ -40410,7 +40431,29 @@ async function pull(context, flags) {
     kit_version: await kitVersion(context.kitRoot)
   });
   await writeAgentFiles(workdir, context.kitRoot);
+  await replacePlaytest(context, workdir, flags);
   print(context, { base_revision_id: flags["revision-id"], files: files.length });
+}
+var PLAYTEST_REPORT = "playtest-report.json";
+var PLAYTEST_DIR = "playtest";
+async function replacePlaytest(context, workdir, flags) {
+  const input = join5(workdir, WORKDIR_DIRS.input);
+  await rm2(join5(input, PLAYTEST_REPORT), { force: true });
+  await rm2(join5(input, PLAYTEST_DIR), { recursive: true, force: true });
+  const url2 = flags["playtest-url"];
+  if (url2 === undefined)
+    return;
+  const report = JSON.parse(new TextDecoder().decode(await context.download(url2)));
+  const shots = (flags["playtest-shots"] ?? "").split(",").filter(Boolean);
+  await mkdir2(join5(input, PLAYTEST_DIR), { recursive: true });
+  const names = [];
+  for (const [index, shot] of shots.entries()) {
+    const name = `${PLAYTEST_DIR}/${index + 1}.png`;
+    await writeFile2(join5(input, name), await context.download(shot));
+    names.push(name);
+  }
+  await writeFile2(join5(input, PLAYTEST_REPORT), `${JSON.stringify({ ...report, screenshots: names }, null, 2)}
+`);
 }
 var NONE = "none";
 var LOCAL = "local";

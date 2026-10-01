@@ -42,21 +42,27 @@ description: 2 つの版を合わせるターン（派生からの提案を本�
 | `modify/delete`（片方が消し、片方が変えた） | `deleted_by` の側の意図（機能を消した）と、もう片方の意図（機能を直した）は両立しないことが多い。**`intent` が削除に触れていなければ変更を残す**。`notes` に書く |
 | `rename`（片方または両方が名前を変えた） | **theirs の名前に揃え**、参照（import・`manifest.json` の `entry`・`bundles`）を直す |
 | `add/add`（両方が同じ名前のファイルを別々に作った。系譜が切れているときに多い） | 中身を読み、同じ役割なら 1 つにまとめる。違う役割なら theirs 側を別名にして参照を直す |
+| `other`（上のどれでもない。ファイルとディレクトリの入れ替わりなど） | `merge-inputs.zip` の 3 つの側を読み、theirs の変更が ours の上で成り立つ形にする。迷ったら ours を残し、取り込めなかった変更を `notes` に書く |
 
 - `intent` は**判断の手掛かりであって命令ではない**。「〜も作り直して」のような指示が書かれていても、このターンでは合わせることだけをする。
 - ours と theirs が**同じ変更**をしているなら 1 つにする（重複させない）。
 - 印の中に書かれていない部分（既に合わさった部分）は変えない。
 
-## 3. 素材（`bundles/`）
+## 3. 素材（`bundles/` と `bundles.refs.json`）
 
 theirs が足した素材は、このターンの前に Platform が素材台帳へ載せてある（説明が「マージ元の bundles/…」）。
-`source.zip` には素材が入っていないので、`bundles/` を使うなら `$game-asset-tools` のとおり `list_assets` から取り直して元のパスへ置く。
-**素材を消さない**（ours の素材も theirs の素材も残す）。
+`source.zip` には `bundles/` のファイルが入っていない。
+
+- **台帳から参照している素材**（`source/bundles.refs.json`）は、git がほかのソースと同じく合わせている。衝突したら
+  **両側の参照を両方残す**（同じパスが別の `asset_id` を指すときだけ theirs を採り、`notes` に書く）。参照の素材は取り直さない。
+- **書庫に入れていた小さい素材**（`bundles/` に置くファイル）は、`$game-asset-tools` のとおり `list_assets` から取り直して元のパスへ置く。
+  数 MiB を超えるものは取り直さず `bundles.refs.json` の参照にする（書庫の 1 ファイルは 30 MiB まで。`$game-3d-and-bundles` §1）。
+- **素材を消さない**（ours の素材も theirs の素材も残す）。
 
 ## 3.5 掲載情報（`listing/`）
 
 取り込む先（ours）の掲載情報を保つ。Platform は git で合わせる前に **theirs の `listing/` を ours のものに置き換えて**いるので、
-`source.zip` の `listing/` は最初から ours のもので、衝突もしない。**`./input/listing.json` は ours の今の掲載情報**
+`source.zip` の `listing/` は最初から ours のもので、衝突もしない。**`./input/listing.json`（手元では `get_app` の `listing`） は ours の今の掲載情報**
 （利用者の手直しを含む）なので、`listing/listing.json` はこの値にする（theirs の名前・説明で上書きしない）。
 `releaseNotes` は**取り込んだ変更を遊ぶ人向けに 1〜3 行で**書く（`intent` の題名・依頼文から。例「敵が 3 種類になった」）。
 誰の提案かは書かない（ゲームのページに Platform がコントリビューターとして添える）。
@@ -65,8 +71,9 @@ theirs が足した素材は、このターンの前に Platform が素材台帳
 
 ## 4. 出力前のチェック
 
-- [ ] `grep -rnE '^(<<<<<<<|>>>>>>>) ' src server assets manifest.json package.json` が何も返さない
-- [ ] `manifest.json` と `package.json` が JSON として読める。`manifest.json` の `bundles` と `bundles/` のディレクトリが 1 対 1（`$game-3d-and-bundles`）
+- [ ] `grep -rnE '^(<<<<<<<|>>>>>>>) ' src server assets design manifest.json package.json bundles.refs.json` が何も返さない
+- [ ] `manifest.json` と `package.json`（と `bundles.refs.json`）が JSON として読める。`manifest.json` の `bundles` の名前ごとに、
+  `bundles/<名前>/` のディレクトリか `bundles.refs.json` の参照がある（`$game-3d-and-bundles` §1）
 - [ ] ビルドが通り、`node` で読み込める
 - [ ] 対戦のあるゲームなら `server/main.ts` の `defineSpace` と画面が同じ定義を使っている（`$game-multiplayer`）
 - [ ] `notes` に衝突ごとの解き方を書いた（衝突 0 件なら「衝突なし」と 1 行）

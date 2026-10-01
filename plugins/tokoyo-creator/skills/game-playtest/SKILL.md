@@ -15,31 +15,38 @@ description: 作ったゲームを自分で遊んで確かめ、直す。核が�
 ```markdown
 | # | 項目 | 確かめ方 | 結果 |
 |---|---|---|---|
-| 1 | 1 回の操作で遊び始められる | 前の版の Platform の試遊（§3） | ✓ |
+| 1 | 1 回の操作で遊び始められる | Platform の試遊（§3。この版の結果は次のターン） | 次のターン |
 | 2 | 左右の入力で自機が動く | ルール検査 | ✓ |
 | 3 | 何もしなくても最初の 10 秒は終わらない | ルール検査 | ✓ |
 | 4 | 針に触れると終わり、リザルトが出る | ルール検査 | ✓ |
 | 5 | リザルトから 1 回の操作で最初に戻る | ルール検査 | ✓ |
 | 6 | うまく取るほど点が増える | ルール検査 | ✓ |
 | 7 | 10 秒ごとに星が速くなる | ルール検査（tuning の値） | ✓ |
-| 8 | プレイ中もスコアが読める | 前の版の Platform の試遊の画面（§3） | ✓ |
+| 8 | プレイ中もスコアが読める | Platform の試遊の画面（§3。この版の結果は次のターン） | 次のターン |
 ```
+
+- 「結果」は、このターンで確かめて通ったものだけ ✓、通らなかったものは ✗（理由）。**確かめていないものに ✓ を付けない**。
+  Platform の試遊で見る項目は、この版では「次のターン」と書き、次のターンで `input/playtest-report.json` を読んで埋める。
 
 必須: 開始できる / 入力で状態が変わる / 最初は失敗しにくい / 終わりが必ず来る / 再挑戦できる / 上手さが結果に出る。
 残りはジャンルの下限（`$game-design` references/genres-minimum.md）から選ぶ。
 
-## 2. ルール検査（毎回・このターンの中で）
+## 2. ルール検査（`rules.ts` があるターンは毎回・このターンの中で）
 
-`src/rules.ts` の遊びのルールを、描画なしで `node` から回す（`$game-design` §3 の形が前提）。
+`src/rules.ts` の遊びのルールを、描画なしで `node` から回す（`$game-design` §3 の形が前提。`rules.ts` の無い前の版を続けるときは
+省いて `notes` に 1 行書く。`$game-design` §1）。
 
 1. `<kit>/skills/game-playtest/assets/playtest-rules.mjs` を `scripts/playtest-rules.mjs` にコピーする（初回だけ。以後はそのファイルを直す）。
 2. 下の方の `CHECKS` を、このゲームの rubric に合わせて書き換える。`idle`（何もしない）と `play`（うまく遊ぶ人の入力）を rules.ts の `Input` の形にする。
    `simulate(rules, { seed, seconds, input })` が `over` / `endedAt` / `score` / `samples` / `brokenNumber` を返す。
+   **雛形の `CHECKS` はアクション向け**（放置しても 10 秒は終わらない・放置すればいつか終わる）。放置で負ける遊び（ワンボタン）、
+   入力が無いと進まない遊び（パズル・ターン制・クリッカー）では、その項目を遊びに合う形（「最初の手で状態が変わる」「解ける」など）に置き換える。
+   「再挑戦で最初に戻る」は `init` が同じ seed で同じ状態を返すことだけを見る。リザルトから戻る操作は画面側なので、`main.ts` を読んで確かめる。
 3. `node scripts/playtest-rules.mjs` を実行する。✗ が出たら直して、全部 ✓ になるまで回す。
 4. 結果を `design/playtest.md` の「結果」に写す。
 
 - **テストファイルはこれ 1 本だけ**。描画や入力キットの単体テストは書かない。
-- 対戦のルールは `server/main.ts` の `defineSpace` にある。同じ形の純粋な関数（手番・勝敗の判定）を `src/rules.ts` に切り出して回す。
+- 対戦のルールも `src/rules.ts` に書き、`server/main.ts` の `defineSpace` がそれを呼ぶ（`$game-design` §3）。検査はその `rules.ts` を回す。
 - 数値を直すときは `src/tuning.ts` だけを変えて回し直す。
 
 ## 3. Platform の試遊（検証のついで）
@@ -52,7 +59,7 @@ Platform は版を検証するときに、描けたゲームを**毎回、最小
 **自分の判断では頼まない**（検証が長くなり、利用者を待たせる）。遊びの振る舞いは §2 のルール検査で確かめる。
 
 結果は次のターンの `./input/playtest-report.json` と `input/playtest/*.png` に届く（前の版を遊んだときの結果）。
-
+手元では `download_source` の `playtest` を `kit.mjs pull` に渡すと同じ場所に置かれる（`instructions.md` §8.3）。
 ```jsonc
 { "versionId": "…",
   "findings": [ { "code": "STATIC_AFTER_INPUT", "message": "…" },   // 最初の入力で画面が変わらなかった

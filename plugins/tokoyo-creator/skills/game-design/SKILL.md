@@ -10,16 +10,16 @@ description: ゲームを作る工程の正本。依頼を受けたら最初に�
 
 ## 1. 工程と完了条件
 
-`update_plan` の項目はこの段階の名前で出す（1 項目 5〜7 語・`in_progress` は 1 つ）。
+`update_plan` の計画は、このターンで通る段階から起こす（項目の書き方は `instructions.md` §0「進め方」）。
 
 | # | 段階 | 次へ行ける条件 | 使う Skill |
 |---|---|---|---|
 | 1 | 企画 | `design/brief.md` の全見出しが埋まり、ジャンルの下限（[references/genres-minimum.md](references/genres-minimum.md)）が列挙されている | この Skill §2 |
 | 2 | 絵で合意 | コンセプト画像とスタイルガイドがある。利用者に見せるべきなら見せて終える | `$game-art-direction` |
 | 3 | 素材の設計 | `design/asset-manifest.md` の全行に経路・理由・枠があり、合計が予算内 | `$game-art-direction` |
-| 4 | 核を遊べる形に | `src/rules.ts` と `src/tuning.ts` があり、四角と円だけで 開始 → 遊ぶ → 勝ち / 負け → 再挑戦 が回る。ルールの検査が通る | この Skill §3、`$game-playtest` |
+| 4 | 核を遊べる形に | `src/rules.ts` と `src/tuning.ts` があり、四角と円だけで 開始 → 遊ぶ → 勝ち / 負け → 再挑戦 が回る。ルールの検査が通る（`rules.ts` の無い前の版を続けるときは下の「2 回目以降」） | この Skill §3、`$game-playtest` |
 | 5 | 素材の差し替え | manifest の全行が済み | `$game-asset-tools` |
-| 6 | 遊んで直す | `design/playtest.md` の必須項目が全部 ✓ | `$game-playtest` |
+| 6 | 遊んで直す | `design/playtest.md` の必須項目が全部 ✓。このターンで確かめられない項目（Platform の試遊で見るもの）は「次のターン」と書き、✓ を付けない | `$game-playtest` |
 | 7 | 数値で整える | 最初の 10〜20 秒は失敗しにくく、1 回がセッション長に収まる。`tuning.ts` の値だけで直した | この Skill §3 |
 | 8 | 磨く | §4 のチェックが埋まる。**この段階で機能を足さない** | `$game-ux` |
 | 9 | 掲載 | `$game-listing` のチェック | `$game-listing` |
@@ -29,7 +29,10 @@ description: ゲームを作る工程の正本。依頼を受けたら最初に�
   - 遊びの核（ルール・操作・目的）が変わる → 1 から
   - 見た目の方向が変わる（絵柄・主役・世界観）→ 2 から
 - 前の版に `design/` が無い（この工程より前に作られた）ときは、今の中身から `brief.md` と `style-guide.md` を起こしてから続ける。
-  ただし**派生（`./input/upstream.json` がある）では起こさない**（本流への提案に関係の無い差分を増やさない）。
+  ただし**派生（`./input/upstream.json`。手元では `get_app` の `upstream` がある）では起こさない**（本流への提案に関係の無い差分を増やさない）。
+- 前の版に `src/rules.ts` が無いときは、**依頼の変更のために作り直さない**（`instructions.md` §4.0 の「変更だけ」が優先）。
+  ルール検査（`$game-playtest` §2）はその版では省き、`notes` に「rules.ts が無いのでルール検査を省いた」と 1 行書く。
+  `rules.ts` / `tuning.ts` に分けるのは、遊びの核から作り直すとき（段階 1 から）だけ。派生では分けない。
 - 自己試遊の結果（`./input/playtest-report.json`）があれば、段階 6 の前に読んで直す（`$game-playtest`）。
 
 ## 2. 企画（`design/brief.md`）
@@ -82,21 +85,19 @@ src/
 - `tuning.ts` は `export const tuning = { ... } as const` 1 つ。数値をコードに散らさない。
 - `rules.ts` は純粋な関数で書く: `init(seed)` / `step(state, input, dt)` / `isOver(state)` / `score(state)` の形。
   乱数は seed から（`Math.random` を直接使わない）。これで `node` からルールだけを回せる（`$game-playtest` §2）。
-- 対戦は `server/main.ts` の `defineSpace` がルールの正本（`$game-multiplayer`）。`tuning.ts` は画面とサーバーが同じものを import する。
+- 対戦は `rules.ts` の関数（手番・勝敗の判定・1 tick の計算）を `server/main.ts` の `defineSpace` から呼ぶ。ルールを書くのは `rules.ts` の
+  1 か所だけで、`defineSpace` はそれを Platform につなぐ（`$game-multiplayer` §2）。`tuning.ts` は画面とサーバーが同じものを import する。
 - **プレイヤーに有利に「ごまかす」**のは既定で入れる（`tuning.ts` に値を置く）:
   足場の端から離れても少しの間は跳べる（coyote 80〜120ms）、着地の少し前の入力を覚える（buffer 100ms）、
   当たり判定は見た目より少し小さく、取る判定は少し大きく。
 
 ## 4. 磨く（段階 8）
 
-機能は足さず、次を確かめて足りないものだけ入れる。量と上限は `$game-ux` の references/feedback.md。
+機能は足さず、`$game-ux` §9 のチェック（手応え・読める文字・動きの安全・リザルト・設定）を通し、足りないものだけ入れる。
+量と上限は `$game-ux` の references/feedback.md。ここで見るのはそれ以外の 2 つだけ:
 
-- [ ] 押した瞬間に見た目と音が返る
-- [ ] 良い / 悪い / 記録更新 / 無効な操作の 4 種類に反応がある
-- [ ] 動く物に easing（出るとき減速・消えるときは短く）
-- [ ] 当たりにヒットストップ・揺れ・パーティクルがある（`effects` に掛かる）
 - [ ] 勝ち・負けの瞬間に演出があり、何が起きたか分かる
-- [ ] BGM と効果音がある（`design/asset-manifest.md` のとおり）
+- [ ] BGM と効果音が `design/asset-manifest.md` のとおりにある
 
 出荷前の最終確認は [references/ship-checklist.md](references/ship-checklist.md)。
 

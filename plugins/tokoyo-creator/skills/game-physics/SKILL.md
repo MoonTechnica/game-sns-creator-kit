@@ -28,8 +28,18 @@ description: 物理で動くゲーム（落下・衝突・転がる・積む・�
 import RAPIER from '@dimforge/rapier3d-compat'
 import { syncMeshes } from '@workspace/app-sdk/physics'
 
-await RAPIER.init()   // 必須。呼ばずに new RAPIER.World すると失敗する
+async function start() {
+  await RAPIER.init()   // 必須。呼ばずに new RAPIER.World すると失敗する
+  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
+  // …
+}
+
+start().catch((error: unknown) => console.error(error))
 ```
+
+- 配信用バンドルは iife なので、`await RAPIER.init()` を関数の外に書くとビルドが落ちる（上の形にする）。
+- **対戦の画面**（予測・練習モード）でも、`app.space.join` の前に画面側で `RAPIER.init()` する。`init()` が済んでいるのは対戦サーバーだけ
+  （`$game-multiplayer` §2.4）。
 
 - **three.js の `three/addons/physics/RapierPhysics.js` は使わない**（Rapier を CDN から読み込もうとして検証で落ちる）。
   three.js への反映は `syncMeshes(world, map)`（剛体の handle → Mesh）、当たりの形の確認は `debugLines`。

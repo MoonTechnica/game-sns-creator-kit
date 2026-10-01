@@ -1,6 +1,6 @@
 ---
 name: game-controls
-description: ゲームの操作を PC（キーボード・マウス）とスマートフォン（画面上のスティック・ボタン、タップ、スワイプ、ドラッグ）の両方で遊べるように作り、市販のコントローラー（PS5 / Xbox / Switch Pro などのゲームパッド）でも遊べるようにする。どのゲームでも必ず使う。ジャンルごとの定番の操作割り当て、入力キット assets/input.ts（コピーして使う）、操作説明の出し分け、音の開始とキー入力の受け付け、manifest.json の gamepad（対応度）の決め方を扱う。マウスで視点を回すゲームのマウス固定（Pointer Lock）と、端末を傾けて操作するゲームの傾き（tilt）、カメラ・マイクを入力に使うゲームも扱う。input, controls, keyboard, mouse, touch, virtual joystick, swipe, gamepad, controller, DualSense, Xbox, pointer lock, mouse look, FPS, tilt, device motion, accelerometer, camera, microphone, voice input.
+description: ゲームの操作を PC（キーボード・マウス）とスマートフォン（画面のスティック・ボタン・タップ・スワイプ・ドラッグ）の両方で遊べるように作り、市販のゲームパッド（PS5 / Xbox / Switch Pro）でも遊べるようにする。どのゲームでも必ず使う。ジャンルごとの操作割り当て、入力キット assets/input.ts（コピーして使う）、操作説明の出し分け、音の開始、manifest の gamepad、マウス固定（Pointer Lock）・傾き・カメラ / マイクの入力を扱う。input, controls, touch, virtual joystick, gamepad, pointer lock, FPS, tilt, microphone.
 ---
 
 # ゲームの操作（PC とスマホの両対応 + ゲームパッド）
@@ -157,6 +157,8 @@ description: ゲームの操作を PC（キーボード・マウス）とスマ�
   `input.onAction`（下のボタン）で進めてよい。
 - ブラウザは**利用者の操作の中でしか音を出させない**。しかも**指を置いた瞬間（タッチの `pointerdown`）は
   操作と認めない**（離したとき・クリック・キーは認める）。キットの `onFirstInteraction` はその瞬間に同期で呼ばれる。
+- キットが「最初の操作」に数えるキーは、**`actions` か移動に割り当てたキーだけ**。開始画面に「Enter でスタート」と書くなら、
+  Enter を主アクションの `keys` に入れる（入れないと Enter では始まらない）。
 
 ```ts
 const audio = new AudioContext()                // 作った時点では止まっている（suspended）
@@ -164,9 +166,10 @@ input.onFirstInteraction(() => {
   void audio.resume()                           // ここで呼ぶ（await の後では遅いブラウザがある）
 })
 input.setControlsVisible(false)                 // タイトル中は操作部を隠す
-await input.firstInteraction                    // タップ / クリック / キーのどれか
-input.setControlsVisible(true)
-startGame()
+input.firstInteraction.then(() => {             // タップ / クリック / キーのどれか
+  input.setControlsVisible(true)
+  startGame()
+})
 ```
 
 - `AudioContext` は 1 つだけ作り、効果音も BGM もそれで鳴らす。

@@ -1,6 +1,6 @@
 ---
 name: game-asset-tools
-description: ゲームの絵と音を用意する。無料で使える既存素材（CC0。search_stock_assets / import_stock_asset）の探し方と取り込み方、画像の作り方（内蔵の画像生成、無い環境では generate_image）と、素材ツール（MCP。generate_image / upload_image / remove_background / convert_texture / generate_sound_effect / generate_music / generate_model_3d / generate_motion / upload_asset / list_assets / get_asset）の使い方、予算の配分、透過キャラクター・歩きなどの連番アニメ・アニメ付き 3D・効果音・BGM の手順、失敗したときの対処を扱う。画像・キャラクター・背景・モーション・効果音・BGM・3D モデルを用意するとき、または素材ツールが使えるときに使う。assets, sprites, animation frames, stock assets, CC0, sound effects, music, MCP tools, budget.
+description: ゲームの絵と音を用意する。CC0 のフリー素材の探し方と取り込み方、画像の作り方（内蔵の画像生成、無い環境では generate_image）、素材ツール（MCP）の使い方と予算、透過キャラクター・連番アニメ・アニメ付き 3D・効果音・BGM・動画の手順、自分で作った素材の登録（upload_asset。大きい物は台帳から参照）、失敗したときの対処を扱う。画像・キャラクター・背景・モーション・効果音・BGM・3D モデルを用意するとき、素材ツールが使えるときに使う。assets, sprites, stock assets, CC0, sound effects, music, budget.
 ---
 
 # 絵と音の用意（画像生成 + 素材ツール）
@@ -12,7 +12,7 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 | **内蔵の画像生成がある** | 内蔵の画像生成で作る。**背景を透過できず、大きさの指定も効かない**（常に 1254px 四方前後・1〜2 MB）。画像の枠を使わない | `/workspace/generated_images/` に保存される |
 | **内蔵の画像生成が無い**（手元のエージェントなど） | 素材ツール `generate_image(name, prompt, size, transparent)` で作る。透過は `transparent=true` で 1 回で済む。画像の枠を 1 回使う | 結果の `download_url` から取得する（§4） |
 
-透過・3D・音は素材ツール（MCP）で作る。**作る前に、無料で使える既存素材（CC0）を探す**（§3.5）。
+透過・3D・音は素材ツール（MCP）で作る。何を既存素材（CC0。§3.5）で済ませ、何を作るかは `$game-art-direction` §3 の判定表で決める。
 **ツール一覧に素材ツール（`list_assets` など）が無いとき**は、絵は Canvas（three.js）で描き、音は Web Audio で合成する。
 
 ## 1. 最初にやること（ツールを呼ぶ前に）
@@ -22,10 +22,11 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 1. **`list_assets` を呼ぶ。** 前のターン（リミックス元を含む）で作った素材と、利用者が上げた素材
    （`source: user`）が並ぶ。**作り直さずに使う**。利用者の素材は§9 のとおり最優先。`kind` で種類を絞れる。
    足りない物だけを用意する。
-2. **足りない物は、まず `search_stock_assets` で探す**（§3.5）。キャラの歩き・ジャンプの連番、タイル、UI、
-   アニメ付きの 3D キャラ、効果音・ジングルは既存の素材で揃うことが多い。費用はかからず、
+2. **manifest で「素材」にした物（functional: UI・タイル・汎用の敵や小物・効果音）は `search_stock_assets` で探す**（§3.5）。
+   キャラの歩き・ジャンプの連番、タイル、UI、効果音・ジングルは既存の素材で揃うことが多い。費用はかからず、
    予算の `stock` 枠（生成の枠とは別）だけを使う。**絵柄をそろえたいときは同じパック（`pack`）から取る**。
-3. **見つからない物だけを作る。何を作るかを先に決めて、予算に収める**。結果の `budget` に残りが出る。目安（1 本のゲーム）:
+3. **manifest で「生成」にした物（identity: 主役・固有の敵・キーアート・アイコン・カバー）と、探しても無かった物を作る。
+   何を作るかを先に決めて、予算に収める**。結果の `budget` に残りが出る。目安（1 本のゲーム）:
 
    | 種類 | 使う枠 | 目安 |
    |---|---|---|
@@ -93,10 +94,12 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 - **3D は結果の `animations`**（クリップ名の一覧）を `AnimationMixer` で再生する（`$game-3d-and-bundles`）:
 
   ```js
-  const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/hero.glb'))
-  const mixer = new THREE.AnimationMixer(gltf.scene)
-  mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'walk')).play()
-  // 毎フレーム: mixer.update(deltaSeconds)
+  async function loadHero() {
+    const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/hero.glb'))
+    const mixer = new THREE.AnimationMixer(gltf.scene)
+    mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'walk')).play()
+    return mixer // 毎フレーム: mixer.update(deltaSeconds)
+  }
   ```
 
   人型のアニメ集（`universal-animation-library`）は同じ骨格のモデル用。別のモデルに当てるなら
@@ -104,15 +107,20 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 - 画像は PNG、音は MP3（元が OGG でも変換済み）、3D はテクスチャを埋め込んだ 1 つの GLB で届く。
 - 素材はどれも CC0（クレジット表記は不要。ゲームのページに Platform が出典をまとめて表示する）。
 - 3D の枠が閉じている（ツール一覧に `generate_model_3d` が無い）間は、3D の取り込みも `TOOL_NOT_ALLOWED` になる。
+  自分で作った GLB（3D スタジオ・手続き生成）の `upload_asset` は別枠なので、閉じていても登録できる（§4）。
 
 ## 4. 取得と登録
 
 - 結果の `download_url` は `curl -fsSL -o <suggested_path> '<download_url>'` で取得する（`suggested_path` は `assets/…`）。
 - コードからは **`app.assets.url('assets/hero.png')`** が返す URL で読む
   （`<img src="assets/…">` のような相対 URL は解決されない）。
-- 自分で作った音（MP3）や 3D（GLB）は **`upload_asset(name, kind)`**（`kind` は `audio` か `model_3d`）で登録する。
+- 自分で作った音（MP3）・3D（GLB）・動画（MP4）は **`upload_asset(name, kind)`**（`kind` は `audio` / `model_3d` / `video`）で登録する。
   返った `upload_url` に `curl -fsS -X PUT -F 'file=@<パス>;type=audio/mpeg' '<upload_url>'`
-  （GLB は `type=model/gltf-binary`）でアップロードし、`get_asset` を呼ぶと確定する。同じ種類の生成の枠を 1 回使う。
+  （GLB は `type=model/gltf-binary`、動画は `type=video/mp4`）でアップロードし、`get_asset` を呼ぶと確定する。
+  **1 つ 256 MiB まで**。持ち込みの枠（`upload`）を 1 回使い、生成の枠は減らない。
+- **大きい素材（1 ファイル数 MiB 以上の音・3D・動画）はゲームに同梱しない。** 台帳に載せた `asset_id` を
+  `source/bundles.refs.json` で参照する（書庫の 1 ファイルは 30 MiB まで。書き方は `$game-3d-and-bundles` §1）。
+- 素材の保存量はアカウントで 20 GiB まで（超えると `STORAGE_QUOTA_EXCEEDED`）。同じ物を何度も上げない。
 
 ## 5. 待ち時間
 
@@ -124,7 +132,8 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 
 | エラー | 意味 | すること |
 |---|---|---|
-| `BUDGET_EXCEEDED` | その種類の枠（取り込みなら `stock` の枠）を使い切った | 取り込みの枠が尽きたら生成で、生成の枠が尽きたら Canvas の描画と Web Audio の合成で作る。やり直さない |
+| `BUDGET_EXCEEDED` | その種類の枠（取り込みなら `stock`、持ち込みなら `upload` の枠）を使い切った | 取り込みの枠が尽きたら生成で、生成の枠が尽きたら Canvas の描画と Web Audio の合成で作る。やり直さない |
+| `STORAGE_QUOTA_EXCEEDED` | ゲームの持ち主の素材が 20 GiB を超えた | 新しく上げない。`list_assets` の既存の素材を使うか、描画・合成で作る。`notes` に 1 行書く（利用者が素材の画面で消せる） |
 | `INSUFFICIENT_CREDITS` | 利用者のクレジットが尽きた（どのツールも使えない） | 以後ツールを呼ばない。手元の素材と描画・合成だけで、いまの状態をすぐ完成させる |
 | `CONTENT_BLOCKED` | 内容で断られた | 表現を変えて 1 回だけやり直す。だめなら描画で作る |
 | `ASSET_NOT_READY` | アップロードがまだ届いていない | アップロードの `curl` が成功したか確かめてから呼び直す |
@@ -136,6 +145,7 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 | `TEXTURE_SOURCE_UNSUPPORTED` | `convert_texture` の元が PNG / JPEG ではない（WebP など） | PNG の素材（`upload_image` したもの）を渡す |
 | `CONVERSION_FAILED` | KTX2 に変換できなかった / フリー素材の音を MP3 にできなかった | 1 回だけやり直す。だめならその画像は PNG のまま 2D で使う。音は別の素材を探す |
 | `ASSET_NOT_FOUND`（`import_stock_asset`） | その `stock_id` が無い | `search_stock_assets` の結果の `stock_id` をそのまま渡す |
+| `STUDIO_BUSY`（`run_3d_script`） | このジョブの 3D スタジオが別のスクリプトを動かしている | 前の実行を `get_3d_run` で受け取ってから呼ぶ（`$game-3d-studio`） |
 
 **素材が 1 つ手に入らなくてもゲームは完成させる。** 素材は見た目を良くするもので、遊べることが先。
 
@@ -173,25 +183,29 @@ description: ゲームの絵と音を用意する。無料で使える既存素�
 
   | 発話の指示 | すること |
   |---|---|
-  | ゲームの中で使う・表示する・流す（「この画像を主人公に」「この動画をオープニングで流して」） | `get_asset` で取得して同梱する（§4）。画像は§2 のとおり縮小して `assets/` に、音・3D は§2 の置き方で |
+  | ゲームの中で使う・表示する・流す（「この画像を主人公に」「この動画をオープニングで流して」） | 画像は `get_asset` で取得し、§2 のとおり縮小して `assets/` に同梱する。音・3D は小さければ同梱、数 MiB を超えるもの・動画は取得せず `bundles.refs.json` で参照する（§4） |
   | 参考・雰囲気・「こういう動きで」「この感じの絵柄で」 | 添えられた画像（動画はコマ割り）を見て、絵柄・色・動き・間を真似て作る。**ファイルは同梱しない** |
   | 何も言っていない | 画像・音・3D はゲームで使う。**動画は参考として扱う**（同梱しない） |
 
-- **動画をゲームで流すとき**: `get_asset` の `download_url` を `bundles/<名前>/<name>.mp4` に取得し、
-  `manifest.json` の `bundles` に `<名前>` を宣言する（初期ダウンロードの 20 MiB に入れない。`$game-3d-and-bundles`）。
-  `app.bundles.load('<名前>')` の後、`app.assets.url()` が返す URL（Host が渡す blob URL）を `<video>` に渡す:
+- **動画をゲームで流すとき**: ファイルは取得せず、`source/bundles.refs.json` に
+  `{"refs": {"bundles/intro/opening.mp4": "<asset_id>"}}` と書いて台帳から参照し、`manifest.json` の `bundles` に `intro` を宣言する
+  （書庫にも初期ダウンロードの 20 MiB にも入らない。`$game-3d-and-bundles` §1）。
+  `app.bundles.load('intro')` の後、`app.assets.url()` が返す URL（Host が渡す blob URL）を `<video>` に渡す:
 
   ```js
-  await app.bundles.load('intro')
-  const video = document.createElement('video')
-  video.src = app.assets.url('bundles/intro/opening.mp4')
-  video.playsInline = true
-  video.muted = true // 自動で流すなら muted が要る。音を出すのは最初の操作の後（`$game-controls` §3）
-  await video.play()
-  // 描画に使うなら毎フレーム ctx.drawImage(video, …) / three.js は new THREE.VideoTexture(video)
-  // 終わったら video.pause(); video.removeAttribute('src'); app.bundles.unload('intro')
+  async function playOpening() {
+    await app.bundles.load('intro')
+    const video = document.createElement('video')
+    video.src = app.assets.url('bundles/intro/opening.mp4')
+    video.playsInline = true
+    video.muted = true // 自動で流すなら muted が要る。音を出すのは最初の操作の後（`$game-controls` §3）
+    await video.play()
+    // 描画に使うなら毎フレーム ctx.drawImage(video, …) / three.js は new THREE.VideoTexture(video)
+    // 終わったら video.pause(); video.removeAttribute('src'); app.bundles.unload('intro')
+    return video
+  }
   ```
 
   結果の `duration_ms` と `width` / `height` で長さと縦横比が分かる（読み込み前に枠を決められる）。
-- 利用者が上げられる形式: 画像 PNG / JPEG / WebP（4 MiB）、音 MP3（8 MiB）、3D GLB（8 MiB）、動画 MP4（H.264・3 分・30 MiB）。
+- 利用者が上げられる形式: 画像 PNG / JPEG / WebP（4 MiB）、音 MP3・3D GLB（256 MiB）、動画 MP4（H.264・3 分・256 MiB）。
 - 利用者の素材は予算を使わない（`get_asset` は何度呼んでもよい）。

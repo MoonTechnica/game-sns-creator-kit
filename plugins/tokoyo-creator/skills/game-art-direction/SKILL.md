@@ -14,7 +14,12 @@ description: 見た目の方向を決めて利用者と合意し、絵と音の�
 |---|---|
 | `key-art.png` | **実際のプレイ画面 1 枚**。主役・敵・背景・HUD の位置が分かり、完成品のつもりで描く。文字は入れない。のちに `listing/cover.png` に使う |
 | `hero.png` | 主役と主な敵 2〜3 体を**同じ縮尺**で並べた 1 枚（単色の背景・正面か側面）。以後の主役の絵はこれを元にする |
+| `title.png`（任意） | タイトル画面の見本 1 枚。タイトルに凝る遊びだけ |
 | `style-guide.md` | 下の 5 行（3D は + 3 行） |
+
+- 画像は **PNG か WebP・長辺 1024px 以下・1 枚 1 MiB 以下・3 枚まで**（`key-art` `hero` `title` の名前だけがチャットに並ぶ。
+  4 MiB を超えた画像は Platform が黙って落とす）。
+- `generate_image`（`size="landscape"` か `"square"`）で作り、`download_url` から取って `source/design/concept/` に置く。
 
 ```markdown
 - 絵柄: 16px 単位のドット絵、輪郭は外周だけ

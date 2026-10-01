@@ -87,11 +87,13 @@ function hash3(seed: number, x: number, z: number): number {
 ```
 
 ```ts
-// 地域を移るたびに、今いる地域の隣を先読みさせる（任意。最大 8 個。同じ group は一緒に取られる）
-app.bundles.hint(neighborsOf(currentRegion))
-// 使う前には必ず load（先読みが終わっている保証は無い）。離れた地域は dispose() してから unload
-await app.bundles.load('forest', { onProgress: drawBar })
-app.bundles.unload('desert')
+async function enterRegion(region: string, leaving: string) {
+  // 地域を移るたびに、今いる地域の隣を先読みさせる（任意。最大 8 個。同じ group は一緒に取られる）
+  app.bundles.hint(neighborsOf(region))
+  // 使う前には必ず load（先読みが終わっている保証は無い）。離れた地域は dispose() してから unload
+  await app.bundles.load(region, { onProgress: drawBar })
+  app.bundles.unload(leaving)
+}
 ```
 
 - 先読みは Host が 32 MiB まで持つ。`hint` に入らなくなった地域の先読みは手放される。
@@ -138,7 +140,8 @@ app.bundles.unload('desert')
 
 - `documentSchema` の `worlds` は `members` を遊ぶ人数に、`write` を `owner`（卓を立てた人だけが書く）か `member` にする。
 - **1 回の卓は最長 30 分**（`maxDurationSec` は 1800 まで）。長く遊ぶなら **30 分ごとに世界を保存して卓を立て直す**:
-  `app.space.onFinish` に `{ reason: 'timeout' }`（時間切れ）が来たら差分を `worlds` に書き、「続きから」ボタンで新しい卓を立てて同じ場を読む。
+  `session.onFinish` に `finish.reason === 'timeout'`（時間切れ）が来たら差分を `worlds` に書き、「続きから」ボタンで新しい卓を立てて同じ場を読む
+  （`session` は `app.space.join` が返したもの。`app-sdk/spec.md` §3.3）。
   終わる数分前に画面で知らせる。
 - 全員が同じ seed を使う（場の作成時に seed を決めて `worlds` に書き、入った人はそれを読む）。
 

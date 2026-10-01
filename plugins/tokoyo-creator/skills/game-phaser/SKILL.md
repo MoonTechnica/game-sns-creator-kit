@@ -1,6 +1,6 @@
 ---
 name: game-phaser
-description: 同梱の 2D ゲームエンジン Phaser 4 でゲームを作るときの Platform との継ぎ目を扱う。素材は app.assets.url の URL だけを Loader に渡す、キーボードとゲームパッドは入力キット・Phaser はポインタだけ、画面は Scale Manager の FIT / EXPAND、物理は 1 人用なら Arcade・対戦のルールは Rapier、止める・再開・画面の共有、Phaser 3 の書き方を混ぜないこと、Phaser 公式の Skill の読み方。横スクロール・見下ろし・シューティング・タイルマップ・スプライトアニメやパーティクルの多い 2D を Phaser で作ると決めたときに使う。phaser, phaser 4, 2d engine, scene, sprite, spritesheet, atlas, tilemap, tiled, tween, particles, arcade physics.
+description: 同梱の 2D ゲームエンジン Phaser 4 で作るときの Platform との継ぎ目を扱う。素材は app.assets.url の URL だけを Loader に渡す、キーボードとゲームパッドは入力キット・Phaser はポインタだけ、Scale Manager の FIT / EXPAND、物理は 1 人用なら Arcade・対戦は Rapier、止める・再開・画面の共有、Phaser 3 の書き方を混ぜないこと。横スクロール・見下ろし・シューティング・タイルマップ・スプライトアニメの多い 2D を Phaser で作ると決めたときに使う。phaser, 2d engine, sprite, tilemap, tween, particles, arcade physics.
 ---
 
 # 2D のゲームエンジン（同梱の Phaser 4）

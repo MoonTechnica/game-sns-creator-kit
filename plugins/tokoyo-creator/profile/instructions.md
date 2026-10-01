@@ -149,8 +149,9 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 ### 4.0 前の版から続ける（`./input/`）
 
-手元では前の版は `pull` が `./source/` に展開してある（§8）。下の表は Platform の生成ターンのもので、手元では
-`merge-report.json` ほか（マージの材料）だけが `./input/` に置かれる。
+手元では前の版は `pull` が `./source/` に展開してある（§8）。下の表は Platform の生成ターンのもので、手元の `./input/` には
+前の版の試遊の結果（`playtest-report.json`。`pull` が置く）とマージの材料（`merge-report.json` ほか）だけが置かれる。
+掲載情報は `get_app` の `listing`、派生かどうかは `get_app` の `upstream` を見る。
 ターンごとに新しい Sandbox で動くので、前のターンの作業は残っていない。Platform が前の版を
 `/workspace/input/` に置く。
 
@@ -161,6 +162,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 | `source.zip` | **前の版のソース一式**（前のターンが出した `source.zip` そのもの） | 展開して土台にし、**利用者の説明が求める変更だけ**を加える。作り直さない |
 | `source.zip.url` | 前の版が大きいので URL で渡した（中身は 1 行の URL） | `curl -fsSL "$(cat /workspace/input/source.zip.url)" -o /workspace/input/source.zip` で取得してから上と同じ |
 | `merge-report.json` ほか | 2 つの版を合わせるターン | `$game-merge` に従う |
+| `playtest-report.json`（と `playtest/*.png`） | 前の版を Platform が試遊した結果 | 依頼の作業より先に読む（`$game-playtest` §3） |
 | `upstream.json` | このゲームは**派生（リミックス）**で、本流がある | 下の「派生で作るとき」に従う |
 
 - 前の版の `manifest.json` の `sdkVersion` が `1` なら **2 に上げ、`renderer` を書く**（`<kit>/sdk/app-sdk/MIGRATION.md` の「1 → 2」。
@@ -283,7 +285,7 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 |---|---|
 | `.tokoyo.json` | `app_id`・`session_id`・`base_revision_id`（取り込んだ版）・`kit_root`（`<kit>`）ほか。手で書き換えない |
 | `source/` | 作るプロジェクト（`source.zip` の中身）。`package.json` の SDK の参照は `file:<kit>/sdk/<pkg>` の絶対パス。Skill や §4 に `file:/workspace/sdk/<pkg>` とあれば `<kit>` の実パスに読み替える（`pack` が `/workspace` の形へ戻す） |
-| `input/` | マージの材料（`merge-report.json` ほか）。`$game-merge` が読む |
+| `input/` | 前の版の試遊の結果（`playtest-report.json` と `playtest/`。`$game-playtest` §3）とマージの材料（`merge-report.json` ほか。`$game-merge`） |
 | `assets-cache/` | 素材ツールの `download_url` から取った素材。小さいものは `source/assets/` か `source/bundles/` へコピーする（素材の `suggested_path` は `source/` からの相対）。大きいものはコピーせず `source/bundles.refs.json` で参照する（§2） |
 | `outputs/` | 送る 3 つ（§2） |
 | `review/` | 届いた提案を読むための版（`kit.mjs review`。§8.6）。送らない |
@@ -297,7 +299,8 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 
 1. **取得**: `get_app({ app_id })` で `head_revision_id` を見る。`.tokoyo.json` の `base_revision_id` と違えば
    `download_source({ app_id })` → `kit.mjs pull --url <url> --sha256 <sha256> --revision-id <revision_id>`
-   （`source/` を置き換える。`node_modules` は残る）。**手元に送っていない変更があるなら上書きせず §8.4 で合わせる。**
+   （`source/` を置き換える。`node_modules` は残る）。結果の `playtest` が null でなければ
+   `--playtest-url <playtest.url> --playtest-shots <playtest.screenshots をカンマでつないだもの>` も付ける（`input/` に試遊の結果が置かれる）。**手元に送っていない変更があるなら上書きせず §8.4 で合わせる。**
 2. **作る**: `source/` で `npm install`（または `bun install`）してからビルドする。依存は足さない（§3）。
 3. **出力**: `source/dist/` を作り、`source/listing/` の掲載情報を用意し（`$game-listing`。今の値は `get_app` の `listing`）、
    `outputs/build-report.json` を書き（§2）、`kit.mjs pack` を実行する。

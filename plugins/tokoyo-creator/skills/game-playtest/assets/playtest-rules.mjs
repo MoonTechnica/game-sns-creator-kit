@@ -10,7 +10,7 @@
  * 依存はゲームのプロジェクトにある rollup と typescript だけ（追加しない）。
  */
 import { existsSync } from 'node:fs'
-import { resolve as resolvePath } from 'node:path'
+import { dirname, resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { rollup } from 'rollup'
 import ts from 'typescript'
@@ -33,10 +33,13 @@ export async function loadRules(entry) {
               `${source} は読み込めない。rules.ts は描画・SDK・パッケージに触れない純粋な関数だけにする`
             )
           }
-          const base = new URL(source, pathToFileURL(importer)).pathname
+          // ファイルのパスのまま解決する（URL の pathname は空白や日本語を %xx にして見つからなくなる）
+          const base = resolvePath(dirname(importer), source)
+          // TypeScript の ESM は './tuning.js' と書いて tuning.ts を指す
+          const stem = base.endsWith('.js') ? base.slice(0, -'.js'.length) : base
           const candidates = TS_EXTENSIONS.some((extension) => base.endsWith(extension))
             ? [base]
-            : [...TS_EXTENSIONS.map((extension) => `${base}${extension}`), `${base}.js`, base]
+            : [...TS_EXTENSIONS.map((extension) => `${stem}${extension}`), base]
           return candidates.find((candidate) => existsSync(candidate)) ?? null
         },
         transform(code, id) {

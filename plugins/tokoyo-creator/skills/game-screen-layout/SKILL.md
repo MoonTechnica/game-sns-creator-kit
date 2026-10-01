@@ -39,7 +39,7 @@ resize()
 - **Phaser 4 は自前の `resize()` を書かず Scale Manager を使う**: 方式 A（§2）は `Phaser.Scale.FIT`、方式 B は
   `Phaser.Scale.EXPAND`（どちらも `autoCenter: Phaser.Scale.CENTER_BOTH`、基準の大きさは縦 720×1280 / 横 1280×720 のように大きめ）。
   `RESIZE` は画素が CSS の px と 1:1 になってスマホでぼけるので使わない。配置の決め直しは `this.scale.on('resize', …)`（`$game-phaser` §5）。
-- three.js は `renderer.setPixelRatio(Math.min(devicePixelRatio, 2))`、`renderer.setSize(w, h)`、
+- three.js は `renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5))`（3D は描く画素がそのまま重さになる。`$game-3d-and-bundles` §2）、`renderer.setSize(w, h)`、
   `camera.aspect = w / h; camera.updateProjectionMatrix()`。
 - `manifest.json` の `orientation` は**実際に合う向き**を書く（`portrait` / `landscape` / `any`）。
   ただし Platform は向きを固定しない。**違う向きでも遊べる**レイアウトにする（§2）。
