@@ -3,7 +3,7 @@
   "mcpServers": {
     "game-sns": {
       "type": "streamable-http",
-      "url": "https://game-sns-seven.vercel.app/mcp/creator"
+      "url": "https://tokoyo.games/mcp/creator"
     }
   }
 }

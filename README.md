@@ -66,7 +66,7 @@ approval_mode = "approve"
 2. Skills を置く: エージェントの Skills の置き場（例: `.agents/skills/`）に
    `plugins/game-sns/skills/*` をリンクする。知識だけでよければ `npx skills add moontechnica/game-sns-creator-kit` でも入ります
    （その場合、送信には 1. の Kit が要ります。Skill が Kit の場所を尋ねます）
-3. MCP を登録する: Streamable HTTP・OAuth で `https://game-sns-seven.vercel.app/mcp/creator`
+3. MCP を登録する: Streamable HTTP・OAuth で `https://tokoyo.games/mcp/creator`
    （OAuth の callback のポートを固定できるクライアントなら `43125`）
 4. エージェントの MCP の画面からログインする
 
