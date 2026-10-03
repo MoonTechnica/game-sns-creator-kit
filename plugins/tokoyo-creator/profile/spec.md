@@ -72,7 +72,7 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=2)`
 | 項目 | 値 | 理由 |
 |---|---|---|
 | `manifest.json` の `kind` | `"game"` | この Profile の対象 |
-| `manifest.json` の `sdkVersion` | `2` | 配る SDK の版。`./input/` の前の版が `1` なら 2 に上げる（`<kit>/sdk/app-sdk/MIGRATION.md`「1 → 2」） |
+| `manifest.json` の `sdkVersion` | `2` | 配る SDK の版。Platform はこれ以外を受け付けない |
 | `manifest.json` の `renderer` | 選んだ道具（`instructions.md` §4.2）に合わせる: three.js（`three/webgpu`）は `"webgpu"`、Phaser 4 は `"webgl"`、Canvas 2D は `"canvas2d"` | 3D の既定は `WebGPURenderer`（WebGPU が無い端末では自動で WebGL2）。省略すると `"webgpu"` |
 | `manifest.json` の `runtimeVersion` | `1` | Shell の版。Platform が互換表で解決する |
 | 対戦人数 | 2〜8（`{ "min", "max" }` か役割ごとの `roles`） | Platform の範囲。9 人以上・1 人の対戦は受け付けない（一人で遊ばせるなら練習モード） |

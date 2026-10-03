@@ -23722,8 +23722,14 @@ var DEVICE_MICROPHONE_MAX_SAMPLE_RATE = 48000;
 
 // frontend/packages/app-protocol/src/manifest.ts
 var MANIFEST_VERSION = 1;
-var SDK_VERSION_V2 = 2;
-var V2_CAPABILITIES = [
+var SDK_VERSION = 2;
+var CAPABILITIES = [
+  "identity.read",
+  "store.read",
+  "store.write",
+  "space.connect",
+  "ui.openInvite",
+  "ui.openShare",
   "leaderboard.read",
   "leaderboard.write",
   "documents.read",
@@ -23734,15 +23740,6 @@ var V2_CAPABILITIES = [
   "device.motion",
   "device.pointerLock",
   "share.capture"
-];
-var CAPABILITIES = [
-  "identity.read",
-  "store.read",
-  "store.write",
-  "space.connect",
-  "ui.openInvite",
-  "ui.openShare",
-  ...V2_CAPABILITIES
 ];
 var capabilitySchema = exports_external.enum(CAPABILITIES);
 var ORIENTATIONS = ["portrait", "landscape", "any"];
@@ -23873,20 +23870,11 @@ var deviceManifestSchema = exports_external.strictObject({
   motion: deviceFeatureSchema.optional(),
   pointerLock: deviceFeatureSchema.optional()
 });
-var V2_MANIFEST_KEYS = [
-  "leaderboards",
-  "documentSchemaVersion",
-  "documentSchema",
-  "ai",
-  "renderer",
-  "device",
-  "safeArea"
-];
-var manifestObjectSchema = exports_external.strictObject({
+var manifestSchema = exports_external.strictObject({
   manifestVersion: exports_external.literal(MANIFEST_VERSION).default(MANIFEST_VERSION),
   kind: exports_external.string().min(1).max(64),
   runtimeVersion: exports_external.int().min(1),
-  sdkVersion: exports_external.int().min(1),
+  sdkVersion: exports_external.literal(SDK_VERSION),
   entrypoint: artifactPathSchema,
   space: spaceManifestSchema.nullable().default(null),
   orientation: orientationSchema.default("any"),
@@ -23896,50 +23884,13 @@ var manifestObjectSchema = exports_external.strictObject({
   capabilities: exports_external.array(capabilitySchema).default([]),
   externalNetwork: exports_external.boolean().default(false),
   bundles: bundlesManifestSchema.default({}),
-  leaderboards: leaderboardsManifestSchema.optional(),
-  documentSchemaVersion: exports_external.int().min(1).optional(),
-  documentSchema: documentSchemaSchema.nullable().optional(),
-  ai: aiManifestSchema.nullable().optional(),
-  renderer: rendererSchema.optional(),
-  device: deviceManifestSchema.optional(),
+  leaderboards: leaderboardsManifestSchema.default({}),
+  documentSchemaVersion: exports_external.int().min(1).default(1),
+  documentSchema: documentSchemaSchema.nullable().default(null),
+  ai: aiManifestSchema.nullable().default(null),
+  renderer: rendererSchema.default("webgpu"),
+  device: deviceManifestSchema.default({}),
   safeArea: safeAreaModeSchema.optional()
-});
-function rejectV2FeaturesInV1(manifest, ctx) {
-  if (manifest.sdkVersion >= SDK_VERSION_V2)
-    return;
-  const message = `requires sdkVersion ${SDK_VERSION_V2} or later`;
-  for (const key of V2_MANIFEST_KEYS) {
-    if (manifest[key] !== undefined)
-      ctx.addIssue({ code: "custom", message, path: [key] });
-  }
-  manifest.capabilities.forEach((capability, index) => {
-    if (V2_CAPABILITIES.includes(capability)) {
-      ctx.addIssue({ code: "custom", message, path: ["capabilities", index] });
-    }
-  });
-  for (const [name, bundle] of Object.entries(manifest.bundles)) {
-    if (bundle.group !== undefined) {
-      ctx.addIssue({ code: "custom", message, path: ["bundles", name, "group"] });
-    }
-  }
-  for (const [name, field] of Object.entries(manifest.storeSchema?.fields ?? {})) {
-    if (field.type === "blob") {
-      ctx.addIssue({ code: "custom", message, path: ["storeSchema", "fields", name, "type"] });
-    }
-  }
-}
-var manifestSchema = manifestObjectSchema.superRefine(rejectV2FeaturesInV1).transform((manifest) => {
-  if (manifest.sdkVersion < SDK_VERSION_V2)
-    return manifest;
-  return {
-    ...manifest,
-    leaderboards: manifest.leaderboards ?? {},
-    documentSchemaVersion: manifest.documentSchemaVersion ?? 1,
-    documentSchema: manifest.documentSchema ?? null,
-    ai: manifest.ai ?? null,
-    renderer: manifest.renderer ?? "webgpu",
-    device: manifest.device ?? {}
-  };
 });
 function sortKeysDeep(value) {
   if (Array.isArray(value)) {
@@ -24162,7 +24113,6 @@ var safeAreaInsetsSchema = exports_external.strictObject({
 var contextPayloadSchema = exports_external.strictObject({
   identity: identitySchema,
   capabilities: exports_external.array(capabilitySchema),
-  sdkVersion: exports_external.int().min(1),
   api: apiContextSchema,
   space: spaceConnectionSchema.optional(),
   practice: spacePracticeSchema.optional(),
@@ -24851,7 +24801,7 @@ function validateStatic(files, options = {}) {
       }
     }
   }
-  const aiPrompts = manifest.sdkVersion >= SDK_VERSION_V2 ? validateV2(manifest, files, options, errors3, warnings) : [];
+  const aiPrompts = validateFeatures(manifest, files, options, errors3, warnings);
   return { manifest, errors: errors3, warnings, aiPrompts };
 }
 function clientSources(manifest, files) {
@@ -24868,11 +24818,11 @@ var USES_WEBGPU = /\bWebGPURenderer\b|['"]three\/webgpu['"]|\bnavigator\s*\.\s*g
 var USES_WEBGL = /\bWebGLRenderer\b|getContext\s*\(\s*['"](?:webgl2?|experimental-webgl)['"]/;
 var PHASER_LOADER_URL = /\.load\s*\.\s*(?:setBaseURL|setPath|script|scripts|multiatlas|pack|plugin|scenePlugin|sceneFile)\s*\(|\.load\s*\.\s*[A-Za-z]+\s*\(\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`|[\w$.]+)\s*,\s*['"`](?!data:)/;
 var PHASER_V3_API = /\.setPipeline\s*\(|\.(?:postFX|preFX)\b|\bBitmapMask\b|\bGeom\s*\.\s*Point\b|\bMath\s*\.\s*PI2\b|\bGenerateTexture\b/;
-function validateV2(manifest, files, options, errors3, warnings) {
+function validateFeatures(manifest, files, options, errors3, warnings) {
   const declares = (capability) => manifest.capabilities.includes(capability);
   const sources = clientSources(manifest, files);
   const uses = (pattern) => sources.some((source) => pattern.test(source));
-  const hasBoards = Object.keys(manifest.leaderboards ?? {}).length > 0;
+  const hasBoards = Object.keys(manifest.leaderboards).length > 0;
   const declaresLeaderboard = declares("leaderboard.read") || declares("leaderboard.write");
   if (declaresLeaderboard && !hasBoards) {
     errors3.push({
@@ -24885,7 +24835,7 @@ function validateV2(manifest, files, options, errors3, warnings) {
       message: "the manifest declares leaderboards but neither leaderboard.read nor leaderboard.write"
     });
   }
-  const documentSchema = manifest.documentSchema ?? null;
+  const documentSchema = manifest.documentSchema;
   const declaresDocuments = declares("documents.read") || declares("documents.write");
   if (declaresDocuments && documentSchema === null) {
     errors3.push({
@@ -24899,8 +24849,8 @@ function validateV2(manifest, files, options, errors3, warnings) {
     });
   }
   errors3.push(...checkDocumentDefaults(documentSchema));
-  errors3.push(...checkDocumentSchema(options.previousDocumentSchema ?? null, documentSchema, manifest.documentSchemaVersion ?? 1));
-  const ai = manifest.ai ?? null;
+  errors3.push(...checkDocumentSchema(options.previousDocumentSchema ?? null, documentSchema, manifest.documentSchemaVersion));
+  const ai = manifest.ai;
   const byPath = new Map(files.map((file2) => [file2.path, file2]));
   if (declares("ai.chat") && ai === null) {
     errors3.push({
