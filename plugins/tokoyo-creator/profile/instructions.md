@@ -151,7 +151,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 手元では前の版は `kit.mjs clone` / `kit.mjs pull` が `source/`（git のリポジトリ）に履歴ごと取り出す（§8.3）。画像・音・3D などの
 ファイル（Git LFS）の中身も置かれる。`input/` には前の版の試遊の結果（`playtest-report.json`。`pull` が置く）だけが置かれ、
-下の表の `listing.json` と `upstream.json` の代わりに `get_app` の `listing` と `upstream` を見る。
+下の表の `listing.json` と `branch.json` の代わりに `get_app` の `listing` と `branch` を見る。
 前の版がなぜ今の形なのかは `git log` / `git log -p <ファイル>` / `git blame` で読む。
 
 | 置かれるもの | 意味 | やること |
@@ -160,7 +160,7 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 | `source/` に commit が無い | 新しい作品 | 下の 1. から作る |
 | `source/` に前の版がある | **前の版のソース一式と履歴** | それを土台にし、**利用者の説明が求める変更だけ**を加える。作り直さない |
 | `playtest-report.json`（と `playtest/*.png`） | 前の版を Platform が試遊した結果 | 依頼の作業より先に読む（`$game-playtest` §3） |
-| `upstream.json` | このゲームは**派生（リミックス）**で、本流がある | 下の「派生で作るとき」に従う |
+| `branch.json` | 同じゲームの外部参加者のfeatで作業している | 下の「派生で作るとき」に従う |
 
 - 前の版の `bundles/` の素材もリポジトリに入っている（commit されたファイル）。`bundles.refs.json` で参照している素材だけは
   リポジトリに無く、素材台帳にある（`$game-3d-and-bundles` §1）。
@@ -168,14 +168,14 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 - 取得に失敗したら作り直さずにターンを終える（`build-report.json` の `notes` に理由を書き、`outputs/` には何も置かない）。
   前の版を失ったまま別物を作ると、利用者の作品が置き換わってしまう。
 
-**派生で作るとき**（`upstream.json` がある）: この変更はあとで本流へ提案され、本流の変更と合わせられる。
+**コントリビュートで作るとき**（`branch.json` または `get_app.branch` の `requires_proposal` が `true`）: この変更はあとで本流へ提案され、本流の変更と合わせられる。
 合わせやすいように、
 
 - **頼まれた変更だけを、必要なファイルだけに**加える。整形し直し・名前の付け替え・並べ替え・「ついでの改善」をしない
   （関係ない差分は本流と衝突し、提案を読む人にも何が変わったのか分からなくなる）。
 - 掲載情報（`listing/`）は、利用者に頼まれない限り**名前・説明・画像を変えない**（`releaseNotes` だけは書く。`$game-listing`）。
   本流へ提案するとき、掲載情報は本流のものが使われる。
-- `upstream.json` の `behind` が `true` なら、`build-report.json` の `notes` に「本流に新しい版があります。取り込んでから
+- `branch.json` の `behind` が `true` なら、`build-report.json` の `notes` に「本流に新しい版があります。取り込んでから
   続けると本流と衝突しにくくなります」と 1 行書く（取り込みは利用者が画面で押す。このターンでは取り込まない）。
 
 ### 4.1 新しく作るとき
@@ -315,7 +315,7 @@ LFS の実体を上げ下ろしするので、最初に一度 `node <kit>/script
 
 ### 8.3 取得 → 作る → 検査 → 送信
 
-1. **取得**: `get_git_bundles({ app_id })` の結果の JSON をそのまま渡す。作業ディレクトリがまだ無ければ新しいディレクトリで
+1. **取得**: `get_git_bundles({ app_id, session_id })` の結果の JSON をそのまま渡す。作業ディレクトリがまだ無ければ新しいディレクトリで
    `kit.mjs clone --bundles '<JSON>'`、あれば `kit.mjs pull --bundles '<JSON>'`（`git pull --rebase` と同じ。新しい bundle だけを取る）。
    `pull` は commit していない変更があると断るので、先に `git commit` する。結果の `status` が `conflict` なら §8.4。
    head の試遊の結果があれば `input/` に置かれる。
@@ -327,7 +327,7 @@ LFS の実体を上げ下ろしするので、最初に一度 `node <kit>/script
    （`files`・`commit_oid`・`base_commit_oid` ほか）を JSON で出す。未 commit の変更・新しい commit が無いときは断る。
 4. **検査**: `kit.mjs check`（取り込み + 静的検証。Platform と同じ検証器）。落ちたら直して 3. からやり直す。
    通っても Platform 側で必ず検証される（動的検証は Platform だけが行う）。
-5. **送信**: `begin_build({ app_id, message, request_key, ...pack の出力 })` → 返った `upload_urls` を
+5. **送信**: `begin_build({ app_id, session_id, message, request_key, ...pack の出力 })` → 返った `upload_urls` を
    `kit.mjs upload --urls '<upload_urls の JSON>'`（LFS の実体を先に上げてから 3 点を PUT する）→ `submit_build({ job_id })` → `get_build({ job_id })` を 3 秒ごとに
    `ready` / `failed` / `cancelled` になるまで呼ぶ（10 分で打ち切り、利用者に伝える）。`message` は利用者向けの 1 行の説明、`request_key` は送信ごとに新しい UUID
    （`node -e "console.log(crypto.randomUUID())"`。同じ送信のやり直しには同じ値を使う）。
@@ -341,11 +341,11 @@ LFS の実体を上げ下ろしするので、最初に一度 `node <kit>/script
 
 `begin_build` / `submit_build` が `STALE_BASE` を返したら、スレッドの head が取り込んだ後に進んでいる（制作画面のチャットなど）。普通の git と同じく載せ直す:
 
-1. `get_git_bundles({ app_id })` → `kit.mjs pull --bundles '<JSON>'`（手元の commit を新しい head の上に載せ直す）。
+1. `get_git_bundles({ app_id, session_id })` → `kit.mjs pull --bundles '<JSON>'`（手元の commit を新しい head の上に載せ直す）。
 2. `status` が `conflict` なら、示されたファイルの衝突を解き（`git diff` で両方の変更を見る。依頼の意図を残す）、`git add` → `git rebase --continue`。
 3. §8.3 の 2. から送り直す（`pack` の `base_commit_oid` は新しい head になっている）。
 
-**本流（リミックス元）の新しい公開版を取り込む**ときは `sync_upstream({ app_id, request_key })`（Platform が合流する）。終わったら 1. で取り込み直す。
+**main の更新を確認する**ときは同じ `session_id` の `get_git_bundles` を取得して pull する。`refs/remotes/tokoyo/heads/main` が最新main、自分の `thread_ref` はfeat。必要ならmainを自分のfeatへgit mergeし、競合を解決して検証・pushする。pullだけでfeatをmainに置き換えない。
 
 ### 8.5 ほかのエラー
 
@@ -366,34 +366,18 @@ LFS の実体を上げ下ろしするので、最初に一度 `node <kit>/script
 
 ### 8.6 リミックスと提案（`$tokoyo-remix` / `$tokoyo-propose` / `$tokoyo-proposals`）
 
-GitHub の fork と Pull Request と同じ。**提案を開く・取り下げる・コメントする・マージするは相手に届くので、
-クライアントが利用者に確認を求める**（Claude Code は毎回。Codex は利用者が `kit.mjs codex-config` の設定を入れていれば）。
-断られたら同じ操作を繰り返さない。
+同じゲームのfeatからmainへ変更を提案する。別の所有ゲームを作らない。元作者・チームメンバーもfeatで編集し、mainの確定と公開は制作画面で利用者が操作する。
 
-0. **何を直すか**: 決まっていなければ `list_apps_wanting_help()` → `list_discussions({ app_id, help_wanted: true })` から選ぶ
-   （作者が「手を貸してほしい」と出している話題）。提案には 1 つの目的だけを入れ、関係ない差分を作らない。
-1. **リミックス**: `resolve_app({ reference })` → `my_forks` があればそれを使う（新しく fork しない）→
-   `remix.allowed` が true なら `remix({ parent_version_id: remix.version_id, request_key })` → 返った `app_id` で §8.3 の 1.（新しいディレクトリで `clone`）。
-   `request_key` は新しい UUID（やり直しには同じ値）。false なら `remix.reason` を利用者に伝えて止まる。
-2. **提案する**: 提案できるのは **fork の検証を通った版**（公開しなくてよい。本流の作者はその版を試遊できる）。
-   送った変更が `ready` になってから `open_proposal({ app_id, title, body })`（版を省くといちばん新しい検証済みの版）。
-   検証済みの版が無ければ `no_validated_version` が返る。返事は `get_proposal` で読み、直したら送って `ready` を待ち
-   `update_proposal({ proposed_version_id })`。
-   応える話題は `discussion_id` に渡す。派生で頼んだ文は既定で提案に添えられる（見せないなら `include_requests: false`）。
-   本流に新しい版が出たら `sync_upstream({ app_id, request_key })` で取り込んでから続ける。
-   返事・マージの結果・本流の新しい版は `list_notifications` で届く（読んだら `mark_notifications_read`）。
-3. **届いた提案**（自分が本流の編集者）: `get_app` の `proposals.incoming_open_count` → `list_proposals` → `get_proposal`。
-   中身は `get_proposal_inputs`（提案の commit を本流の `refs/proposals/<id>` に取り込み、base / ours / theirs の commit を返す）→
-   `kit pull` で `fetched_as`（`refs/remotes/tokoyo/proposals/<id>`）に入るので、`source/` で `git diff <base> <theirs>`
-   （提案の変更）と `git diff <base> <ours>`（その間の本流の変更）を読む（base が null なら `git diff <ours> <theirs>`）。
-   ブランチは切り替えない（読むだけ）。
-   **マージするかは利用者が決める**。`merge_proposal({ proposal_id, request_key })` は Platform の Agent が衝突を解いて
-   ビルドし、検証を通った版が本流の**下書き**に入る（公開はされない。支払い元のクレジットを使う）。進み具合は `get_build({ job_id })`。
+1. `resolve_app({ reference })` で元ゲーム・作者・参加可否・自分の枝を確認する。自分・所属チームのゲームは `get_app` の通常編集へ進む。外部参加は `contribution.allowed` を確認し、既存の `my_branches` を再開するか `create_branch({ app_id, request_key })` で最新mainからfeatを作る。
+2. 元ゲームの `app_id` と自分の `session_id` で §8.3 の取得・変更・検証・pushを行う。素材ツールにも両IDを渡す。生成・検証成功はfeatだけ進め、main・公開版は変えない。
+3. 自分のfeatの検証済みheadを `open_proposal({ app_id, session_id, title, body })` で提出する。省略した版はそのfeatのheadに限る。続きのpushで提案を自動差し替えず、`update_proposal` で明示的に更新する。
+4. 編集者は `get_proposal_inputs({ proposal_id })` の結果を `kit.mjs fetch-review --inputs '<JSON>'` に渡し、`git diff <base> <theirs>` で提案の差分を読む。取得は提案時点のcommitとmainに限定され、手元のfeatやpushのbaseは変わらない。素材取得が必要なら結果の `lfs_url` をその取得だけに指定する。`merge_proposal` は合流候補を作って検証する操作。成功だけではmainへ反映されない。制作画面で候補を試遊し、利用者が「mainへ取り込む」を確定する。確認後にmain・提案が変われば候補を作り直す。
+5. mainへの取り込み後も公開版は維持する。公開はmainの検証済み版を制作画面で明示的に選ぶ。チャットをそのまま続けた場合も、自分のfeat上で作業を続ける。
 
 | エラー | すること |
 |---|---|
 | `FORBIDDEN`（`remix_not_allowed` / `proposals_closed` / `not_upstream_editor`） | 作者の設定か立場の問題。利用者に伝えて止まる |
 | `INVALID_ACTION`（`no_validated_version` / `version_not_validated`） | 検証を通っていない版。push して `ready` を待つ |
-| `INVALID_ACTION`（`proposal_already_open`） | 同じ fork から開いている提案がある。`update_proposal` で版を差し替える |
+| `INVALID_ACTION`（`proposal_already_open`） | 同じfeatから開いている提案がある。`update_proposal` で版を差し替える |
 | `QUOTA_EXCEEDED`（`insufficient_credits`） | マージの支払い元の残高が無い。利用者に伝える |
 | `RATE_LIMITED` | 提案は 1 日 20 件、コメントは 1 日 200 件まで。待つ |

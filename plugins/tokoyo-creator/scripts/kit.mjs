@@ -9329,6 +9329,7 @@ var COMMANDS = {
   setup: { required: ["sdk-url", "sha256"], optional: [], switches: [] },
   clone: { required: ["bundles"], optional: ["mcp-url"], switches: [] },
   pull: { required: ["bundles"], optional: [], switches: [] },
+  "fetch-review": { required: ["inputs"], optional: [], switches: [] },
   build: { required: [], optional: [], switches: [] },
   pack: { required: [], optional: [], switches: [] },
   check: { required: [], optional: [], switches: [] },
@@ -39501,7 +39502,13 @@ function isLfsRequest(request, lfsUrl) {
     return false;
   const asked = `/${path.replace(/^\/+/, "").split("?")[0]}`;
   const root = base.pathname.replace(/\/+$/, "");
-  return asked === root || asked.startsWith(`${root}/`);
+  const scoped = /^(.*\/git\/[^/]+)\/[0-9a-f-]{36}\/info\/lfs$/.exec(root);
+  if (!scoped)
+    return false;
+  const appPath = scoped[1];
+  if (!appPath || !asked.startsWith(`${appPath}/`))
+    return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/info\/lfs(?:\/|$)/.test(asked.slice(appPath.length + 1));
 }
 var CREDENTIAL_USERNAME = "tokoyo-kit";
 
@@ -39927,6 +39934,30 @@ function nonCanonicalFileRefs(text) {
 class PulledError extends Error {
   name = "PulledError";
 }
+function parseReview(text) {
+  const raw = JSON.parse(text);
+  if (!isObject3(raw) || !Array.isArray(raw.bundles)) {
+    throw new PulledError("--inputs must be the JSON get_proposal_inputs returned");
+  }
+  const proposalId = string4(raw, "proposal_id", /^[0-9a-f-]{36}$/);
+  const ref = string4(raw, "ref");
+  const ours = head(raw.ours);
+  const theirs = head(raw.theirs);
+  if (ref !== `refs/proposals/${proposalId}` || !ours || !theirs) {
+    throw new PulledError("review requires a proposal ref and both pinned heads");
+  }
+  return {
+    proposal_id: proposalId,
+    target_app_id: string4(raw, "target_app_id"),
+    source_session_id: string4(raw, "source_session_id"),
+    ref,
+    base: head(raw.base),
+    ours,
+    theirs,
+    bundles: raw.bundles.map(bundle),
+    lfs_url: url2(raw.lfs_url, "lfs_url")
+  };
+}
 var OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 var SHA256 = /^[0-9a-f]{64}$/;
 var THREAD_REF = /^refs\/heads\/thread\/[0-9A-Za-z][0-9A-Za-z_-]*$/;
@@ -39999,6 +40030,7 @@ function parsePulled(text) {
     thread_ref: string4(raw, "thread_ref", THREAD_REF),
     author: { name: string4(author, "name"), email: string4(author, "email", /^[^\s<>]+@[^\s<>]+$/) },
     head: head(raw.head),
+    main: head(raw.main),
     bundles: raw.bundles.map(bundle),
     lfs_url: url2(raw.lfs_url, "lfs_url")
   };
@@ -40410,6 +40442,8 @@ async function runCommand(args, context) {
         return await clone2(context, flags);
       case "pull":
         return await pull(context, flags);
+      case "fetch-review":
+        return await fetchReview(context, flags);
       case "build":
         return await build(context);
       case "pack":
@@ -40633,6 +40667,32 @@ async function pull(context, flags) {
     next: result.status === "conflict" ? "resolve the conflicts in source/, git add them, git rebase --continue, then kit.mjs build → kit.mjs pack" : NEXT_EDIT
   });
 }
+async function fetchReview(context, flags) {
+  const workdir = await findWorkdir(context.cwd);
+  const config2 = await readConfig(workdir);
+  const review = parseReview(flags.inputs);
+  if (review.target_app_id !== config2.app_id) {
+    throw new CommandError("the proposal belongs to another game");
+  }
+  const source = sourceOf(workdir);
+  requireRepo(source);
+  const fetched = await fetchBundles(context.git, source, { bundles: review.bundles, head: review.theirs, thread_ref: review.ref }, [], bundleDownloader(context));
+  for (const side of [review.base, review.ours, review.theirs]) {
+    if (side && !await gitTest(context.git, source, ["cat-file", "-e", `${side.commit_oid}^{commit}`])) {
+      throw new CommandError("the review bundles are missing a pinned commit");
+    }
+  }
+  print(context, {
+    proposal_id: review.proposal_id,
+    fetched: fetched.length,
+    base: review.base,
+    ours: review.ours,
+    theirs: review.theirs,
+    fetched_as: `refs/remotes/tokoyo/proposals/${review.proposal_id}`,
+    lfs_url: review.lfs_url,
+    next: "read the diff with git diff <base> <theirs>; merge and release remain explicit Platform actions"
+  });
+}
 async function build(context) {
   const workdir = await findWorkdir(context.cwd);
   const result = await context.kitBuild(sourceOf(workdir));
@@ -40701,6 +40761,7 @@ async function pack(context) {
       "dist.tar.gz": describeFile(distArchive),
       "build-report.json": describeFile(new Uint8Array(await readFile6(reportPath)))
     },
+    session_id: config2.session_id,
     commit_oid: tip,
     base_commit_oid: base,
     kit_version: await kitVersion(context.kitRoot),

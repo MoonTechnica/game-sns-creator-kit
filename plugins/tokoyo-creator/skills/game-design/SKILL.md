@@ -29,7 +29,7 @@ description: ゲームを作る工程の正本。依頼を受けたら最初に�
   - 遊びの核（ルール・操作・目的）が変わる → 1 から
   - 見た目の方向が変わる（絵柄・主役・世界観）→ 2 から
 - 前の版に `design/` が無い（この工程より前に作られた）ときは、今の中身から `brief.md` と `style-guide.md` を起こしてから続ける。
-  ただし**派生（`./input/upstream.json`。手元では `get_app` の `upstream` がある）では起こさない**（本流への提案に関係の無い差分を増やさない）。
+  ただし**外部参加のfeat（`./input/branch.json`。手元では `get_app` の `branch` の `requires_proposal` が `true`）では起こさない**（本流への提案に関係の無い差分を増やさない）。
 - 前の版に `src/rules.ts` が無いときは、**依頼の変更のために作り直さない**（`instructions.md` §4.0 の「変更だけ」が優先）。
   ルール検査（`$game-playtest` §2）はその版では省き、`notes` に「rules.ts が無いのでルール検査を省いた」と 1 行書く。
   `rules.ts` / `tuning.ts` に分けるのは、遊びの核から作り直すとき（段階 1 から）だけ。派生では分けない。

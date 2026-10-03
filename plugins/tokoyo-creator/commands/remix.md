@@ -1,5 +1,5 @@
 ---
-description: 公開されたゲームをリミックスして（fork）、手元で作り始める
+description: 他の人のゲームの最新mainからfeatを作り、手元で作業を始める
 argument-hint: "<ゲームのページの URL または app_id>"
 ---
 

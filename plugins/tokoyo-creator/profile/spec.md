@@ -52,7 +52,7 @@ Platform 側の対応行は `generation_profiles(kind='game', sdk_version=2)`
 │   ├── game-ux/             # 遊べる体験（最初の 1 手・手応え・読める文字・点滅と揺れの上限・再挑戦・設定の保存）
 │   ├── game-listing/        # 公開ページの掲載情報（名前・説明・遊び方・ジャンル・タグ・アイコン・カバー）
 │   └── game-merge/          # 2 つの版を合わせる（マージ）
-├── input/                   # 前の版・今の掲載情報（listing.json）・前の版の試遊の結果（playtest-report.json）・派生の本流（upstream.json）・マージの材料（instructions.md §4.0）
+├── input/                   # 前の版・今の掲載情報（listing.json）・前の版の試遊の結果（playtest-report.json）・作業ブランチの役割とmain（branch.json）・マージの材料（instructions.md §4.0）
 └── outputs/                 # ここに置いたものだけが Platform に渡る
 ```
 

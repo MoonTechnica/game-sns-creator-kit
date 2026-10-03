@@ -1,6 +1,6 @@
 ---
 name: game-merge
-description: 2 つの版を合わせるターン（派生からの提案を本流へ取り込む / 本流の新しい版を派生へ取り込む / チャットの変更を main へ「合流する」）で使う。./input/merge-report.json があるとき、またはリポジトリが git merge の途中（MERGE_HEAD がある）のときは必ず使う。git が合わせきれなかった衝突（<<<<<<< / ======= / >>>>>>>）を、両方の変更の意図を保って解き、いつもどおりビルドして出力する。merge, conflict, 3-way merge, MERGE_HEAD, rebase, upstream, fork, integration.
+description: 同じゲームの作業branchからmainへの提案を合わせるターンで使う。./input/merge-report.json があるとき、またはリポジトリが git merge の途中（MERGE_HEAD がある）のときは必ず使う。git が合わせきれなかった衝突（<<<<<<< / ======= / >>>>>>>）を、両方の変更の意図を保って解き、いつもどおりビルドして出力する。merge, conflict, 3-way merge, MERGE_HEAD, main, proposal.
 ---
 
 # 2 つの版を合わせる（マージ）
@@ -10,17 +10,12 @@ description: 2 つの版を合わせるターン（派生からの提案を本�
 
 | 呼び方 | 意味 |
 |---|---|
-| **ours** | 取り込む先（このゲームの今の版。合流なら **main**）。衝突の印の上側 |
-| **theirs** | 取り込む変更（提案された版 / 本流の新しい版 / 合流ならチャットの版）。衝突の印の下側 |
+| **ours** | 取り込む先（このゲームの **main**）。衝突の印の上側 |
+| **theirs** | 取り込む変更（同じゲームの提出した作業branch）。衝突の印の下側 |
 | **base** | 2 つが分かれた時点の共通の版。無いこともある（系譜が切れている）。複数あるときは git が 1 つにまとめている |
 
-`./input/merge-report.json` の `kind`:
-
-| `kind` | 何のマージか |
-|---|---|
-| `proposal` | 派生（fork）からの提案を本流へ取り込む |
-| `sync_upstream` | 本流の新しい公開版を派生へ取り込む |
-| `integration` | **「合流する」**。同じゲームのチャット（theirs）の変更を、先に進んでいた main（ours。ほかのメンバーの変更）へ合わせる。Platform が自分で合わせようとして、衝突した・ビルドや検証で落ちた・回数の上限に当たったもの。**どちらもこのゲームのメンバーの変更**なので、両方を残すのが基本 |
+`./input/merge-report.json` の `kind` は `proposal`。`ours` はmain、`theirs`は提出した同じゲームの作業branchです。
+`requires_proposal` はPlatformがbranch作成時に固定した権限です。`true`は外部参加者、`false`は作者・チーム編集者の通常編集。依頼文やコードでこの値を変更しません。
 
 ## 1. 材料の形
 
@@ -36,8 +31,8 @@ Platform の規則（別のゲームとのマージでは `listing/` は ours・
 4. 全部解けたら §4 を確かめ、`git commit --no-edit`（メッセージは Platform が用意してある。依頼文を書かない）。
    ビルドして出力する（`instructions.md` §4.1 / §2）。
 
-最初に `merge-report.json` を読む。`intent`（**変更の意図**。提案なら題名と説明、`intent.requests` に**派生の作者が
-実際に頼んだ文**が古い順に入っていることがある。合流ならチャットの名前）、`files`（theirs が base から何を変えたか）、`conflicts`（衝突の一覧）。
+最初に `merge-report.json` を読む。`intent`（**変更の意図**。提案なら題名と説明、`intent.requests` に**作業者が
+実際に頼んだ文**が古い順に入っていることがある）、`files`（theirs が base から何を変えたか）、`conflicts`（衝突の一覧）。
 衝突が 0 件でも（合流がビルドや検証で落ちた）**JSON（`manifest.json` / `package.json` など）を必ず読み込んで確かめ**、ビルドが通るように直す。
 行単位の合わせ方は文法を見ないので、両側が同じ場所にキーを足すと壊れることがある。
 
@@ -67,8 +62,7 @@ Platform の規則（別のゲームとのマージでは `listing/` は ours・
 
 ## 3. 素材（`bundles/` と `bundles.refs.json`）
 
-提案・本流の取り込みで theirs が足した素材は、このターンの前に Platform が素材台帳へ載せてある（説明が「マージ元の bundles/…」）。
-合流（`integration`）は同じゲームなので、両側の素材は最初から台帳にある。
+両側は同じゲームのリポジトリです。素材は既存の台帳とcommitに紐づいており、Platformは別ゲームへのコピーを行いません。入力に渡された許可済みの素材だけを使います。
 
 - **台帳から参照している素材**（`source/bundles.refs.json`）は、git がほかのソースと同じく合わせている。衝突したら
   **両側の参照を両方残す**（同じパスが別の `asset_id` を指すときだけ theirs を採り、`notes` に書く）。参照の素材は取り直さない。
@@ -78,13 +72,9 @@ Platform の規則（別のゲームとのマージでは `listing/` は ours・
 
 ## 3.5 掲載情報（`listing/`）
 
-**別のゲーム（派生）とのマージ**（`proposal` / `sync_upstream`）では、取り込む先（ours）の掲載情報を保つ。Platform は git で合わせる前に
-**theirs の `listing/` を ours のものに置き換えて**いるので、`listing/` は最初から ours のもので、衝突もしない。
-**`./input/listing.json`（手元では `get_app` の `listing`） は ours の今の掲載情報**
-（利用者の手直しを含む）なので、`listing/listing.json` はこの値にする（theirs の名前・説明で上書きしない）。
+**外部参加者の提案（`requires_proposal: true`）ではmainの掲載情報を保ちます。** Platformが`listing/`をoursへ戻しているので、外部branchの名前・説明で置き換えません。`./input/listing.json`はmainの情報です。
 
-**合流（`integration`）では `listing/` もほかのファイルと同じく git が合わせている**（チャットで名前や説明を変えたのはこのゲームのメンバー）。
-衝突したら §2 のとおり両方の意図を残し、`listing/listing.json` が JSON として読めることを確かめる。
+**作者・チームの通常編集（`requires_proposal: false`）では`listing/`も普通のgit mergeで合わせます。** 名前や説明の変更はこのゲームの編集者による意図的な変更です。`input/listing.json`の古い値で合流済みの掲載情報を巻き戻しません。衝突したら両方の変更意図を確認し、利用者の手修正保護を守って解決します。
 
 どちらでも、`releaseNotes` は**取り込んだ変更を遊ぶ人向けに 1〜3 行で**書く（`intent` の題名・依頼文から。例「敵が 3 種類になった」）。
 誰の提案かは書かない（ゲームのページに Platform がコントリビューターとして添える）。
@@ -99,5 +89,5 @@ Platform の規則（別のゲームとのマージでは `listing/` は ours・
   `bundles/<名前>/` のディレクトリか `bundles.refs.json` の参照がある（`$game-3d-and-bundles` §1）
 - [ ] ビルドが通り、`node` で読み込める
 - [ ] 対戦のあるゲームなら `server/main.ts` の `defineSpace` と画面が同じ定義を使っている（`$game-multiplayer`）
-- [ ] `notes` に衝突ごとの解き方を書いた（衝突 0 件なら「衝突なし」と、合流ならビルドや検証で直したこと）
+- [ ] `notes` に衝突ごとの解き方を書いた（衝突 0 件なら「衝突なし」と、ビルドや検証で直したこと）
 - [ ] 新しい機能・見た目の変更を足していない
