@@ -78,10 +78,12 @@ description: ゲームの絵と音を用意する。CC0 のフリー素材の探
 | kind | 何がある | 探す語の例 |
 |---|---|---|
 | `image` | 2D のキャラ・敵・アイテム・タイル・背景の部品・UI・アイコン。**歩き・ジャンプ・攻撃の連番フレーム** | `platformer player walk` / `enemy walking` / `coin` / `tile grass` / `button` |
-| `audio` | 効果音（打撃・足音・UI・レトロ・カジノ・RPG）、短いジングル（勝利・失敗・レベルアップ）、ボイス | `jump` / `footstep` / `click` / `coin` / `jingle win` / `laser` |
+| `audio` | 効果音（打撃・足音・UI・レトロ・カジノ・RPG）、ジングル、ボイス、Superpowers / Ninja Adventure の BGM | `jump` / `footstep` / `click` / `coin` / `jingle win` / `laser` / `music` |
 | `model_3d` | 低ポリの 3D キット（建物・乗り物・武器・自然）、**アニメ付きのキャラクター**（idle / walk / sprint / jump / attack…）、人型のアニメ集 | `character` / `blocky character` / `car` / `tree` / `animation library` |
 
 - **語は英語で短く**（素材の名前が英語）。1 つ目で見つからなければ語を変えて 2〜3 回まで。
+- **PBR テクスチャも `image`**。Poly Haven / ambientCG を `wood color` / `stone roughness` / `brick normal` 等で探す。同じ `pack` の map を揃える。3Dで使う画像は §8 の `convert_texture` へ渡す。法線は `mode: "normal"`。一部の大きい原本は512pxへ縮小されるので、取り込み結果の寸法を使う。
+- 供給元は Kenney、既存固定版 Quaternius UAL、Superpowers、KayKit Prototype Bits、Poly Haven、ambientCG。検索は索引だけを読み、素材原本は取り込み時に取得する。HDRI・字体・SVG・CC BY の素材はこの経路にはまだ含まれない。
 - 結果は良く合う順。`pack`（パック名）が同じものは絵柄がそろっている。続きは `next_cursor` を渡す。
 - **連番フレーム**（`playerBlue_walk1` … `playerBlue_walk5`）は `name` の末尾の数字順に 1 枚ずつ取り込む
   （1 枚で `stock` 枠を 1 回）。`name` は `hero-walk-1` のように付け、コードで 8〜12 fps で切り替える:
