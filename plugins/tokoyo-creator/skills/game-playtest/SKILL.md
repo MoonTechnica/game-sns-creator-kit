@@ -59,7 +59,7 @@ Platform は版を検証するときに、描けたゲームを**毎回、最小
 **自分の判断では頼まない**（検証が長くなり、利用者を待たせる）。遊びの振る舞いは §2 のルール検査で確かめる。
 
 結果は次のターンの `./input/playtest-report.json` と `input/playtest/*.png` に届く（前の版を遊んだときの結果）。
-手元では `download_source` の `playtest` を `kit.mjs pull` に渡すと同じ場所に置かれる（`instructions.md` §8.3）。
+手元では `kit.mjs clone` / `kit.mjs pull` が `get_git_bundles` の `head.playtest` を同じ場所に置く（`instructions.md` §8.3）。
 ```jsonc
 { "versionId": "…",
   "findings": [ { "code": "STATIC_AFTER_INPUT", "message": "…" },   // 最初の入力で画面が変わらなかった

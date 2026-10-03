@@ -17,7 +17,6 @@
 3. `<kit>/sdk/sample-app/` を読む（最小実装。**構成はこれに倣う**）
 4. **Skill を使う**（`<kit>/skills/`。下の表）。
 5. **`./input/` を見る**（§4.0）。前の版があれば、それを土台にして続きを作る。
-
 | Skill | いつ |
 |---|---|
 | `$game-design` | **必ず・最初に**。作り方の工程（企画 → 見た目の合意 → 素材の設計 → 核を遊べる形に → 素材 → 遊んで直す → 数値 → 磨く → 掲載）と各段階の完了条件、企画（`design/brief.md`）、ジャンルの下限、ルール（`src/rules.ts`）と調整値（`src/tuning.ts`）の分け方 |
@@ -37,7 +36,7 @@
 | `$game-open-world` | 広い世界を歩き回るとき（探索・冒険・サンドボックス。チャンクの読み込み・seed から作る世界・seed + 差分のセーブ・協力プレイの世界） |
 | `$game-ai` | ゲームの中で AI と話すとき（NPC との会話・案内役・物語や選択肢・クエストの生成。`app.ai`）。AI は遊びの味付けで、返事が来なくても遊べる作りにする |
 | `$game-physics` | 物理で動くとき（落下・衝突・転がる・積む・跳ねる。同梱の Rapier。対戦でも同じ結果になる書き方） |
-| `$game-merge` | **`./input/merge-report.json` があるとき**（2 つの版を合わせるターン。新しく作らない。§4.0） |
+| `$game-merge` | **`./input/merge-report.json` があるとき・リポジトリが `git merge` の途中（`MERGE_HEAD` がある）のとき**（2 つの版を合わせるターン。「合流する」も。新しく作らない。§4.0） |
 
 **記憶で書かない。** ここに挙げた文書と Skill に無い API・グローバル変数・外部 URL は存在しない。
 書いても静的検証（取り込み時）と実行時の CSP が落とすので、作り直しになる。
@@ -98,13 +97,14 @@
 ## 2. 出力（`./outputs/` に置くもの）
 
 **3 つすべてを置く。1 つでも欠けるとジョブは失敗し、作ったものは捨てられる。**
-例外は**企画のターン**（`$game-art-direction` §2 で見た目と遊びの方向を見せて返すとき）だけで、`source.zip`（新しいゲームなら `design/` だけ、前の版があれば前のソース一式 + 更新した `design/`）と
-`build-report.json`（`"stage": "concept"`）の 2 つを置く。企画のターンは版を作らないので、掲載情報（`$game-listing`）も作らない。
-手元では `source.zip` と `dist.tar.gz` は `node <kit>/scripts/kit.mjs pack` が作る（自分で固めない）。`build-report.json` は自分で書く（§8）。
+手元ではソースは `source/`（git のリポジトリ）の commit で、zip にはしない。すべて commit してから `node <kit>/scripts/kit.mjs build` → `kit.mjs pack` を実行すると、
+新しい commit が `outputs/source.bundle` に、`source/dist/` が `dist.tar.gz` になる（自分で固めない）。`build-report.json` は自分で書く（§8）。
+**手元に企画のターンは無い**（Platform は手元の送信を企画として受け取らず、`"stage": "concept"` は書かない）。見た目と遊びの方向は
+会話で利用者に見せ（`$game-art-direction` §2）、承認されたら同じ会話で作り続けて、ゲームをビルドしてから 3 つを送る。
 
 | ファイル | 中身 |
 |---|---|
-| `source.zip` | ソース一式（`node_modules` と `dist` と **`bundles/` の素材**は入れない）。次のターンとリミックスの土台。**掲載情報の `listing/`（`$game-listing`）を必ず含める** |
+| `source.bundle` | `kit.mjs pack` が作る、取り込んだ head（`base_commit_oid`）からの新しい commit（git の bundle）。次のターンとリミックスの土台。**掲載情報の `listing/`（`$game-listing`）を必ず commit に含める**。自分で作らない |
 | `dist.tar.gz` | **配信用 Artifact**。下の構成を**書庫の根**に置いて固める |
 | `build-report.json` | `{ "manifest": <manifest.json と同じ JSON>, "buildConfig": { ... }, "notes": ["…"], "listingRequested": ["title"] }`（`notes` は実装できなかった要求・Skill と食い違った点・掲載情報を直した理由。無ければ省く。`listingRequested` は利用者が手で直した掲載情報の項目を、依頼どおりに変えたときだけ。`$game-listing` §5。利用者が試遊を明確に頼んだときだけ `"playtest": { "level": "thorough" }`。`$game-playtest` §3） |
 
@@ -149,26 +149,24 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 ### 4.0 前の版から続ける（`./input/`）
 
-手元では前の版は `pull` が `./source/` に展開してある（§8）。下の表は Platform の生成ターンのもので、手元の `./input/` には
-前の版の試遊の結果（`playtest-report.json`。`pull` が置く）とマージの材料（`merge-report.json` ほか）だけが置かれる。
-掲載情報は `get_app` の `listing`、派生かどうかは `get_app` の `upstream` を見る。
-ターンごとに新しい Sandbox で動くので、前のターンの作業は残っていない。Platform が前の版を
-`/workspace/input/` に置く。
+手元では前の版は `kit.mjs clone` / `kit.mjs pull` が `source/`（git のリポジトリ）に履歴ごと取り出す（§8.3）。画像・音・3D などの
+ファイル（Git LFS）の中身も置かれる。`input/` には前の版の試遊の結果（`playtest-report.json`。`pull` が置く）だけが置かれ、
+下の表の `listing.json` と `upstream.json` の代わりに `get_app` の `listing` と `upstream` を見る。
+前の版がなぜ今の形なのかは `git log` / `git log -p <ファイル>` / `git blame` で読む。
 
 | 置かれるもの | 意味 | やること |
 |---|---|---|
 | `listing.json` | **今の掲載情報**（毎ターン必ずある。利用者が手で直した項目 `userEdited` と、公開に足りない項目 `missing` を含む） | `$game-listing` に従う。ソースの `listing/listing.json` より優先する |
-| ほかに何も無い | 新しい作品 | 下の 1. から作る |
-| `source.zip` | **前の版のソース一式**（前のターンが出した `source.zip` そのもの） | 展開して土台にし、**利用者の説明が求める変更だけ**を加える。作り直さない |
-| `source.zip.url` | 前の版が大きいので URL で渡した（中身は 1 行の URL） | `curl -fsSL "$(cat /workspace/input/source.zip.url)" -o /workspace/input/source.zip` で取得してから上と同じ |
-| `merge-report.json` ほか | 2 つの版を合わせるターン | `$game-merge` に従う |
+| `source/` に commit が無い | 新しい作品 | 下の 1. から作る |
+| `source/` に前の版がある | **前の版のソース一式と履歴** | それを土台にし、**利用者の説明が求める変更だけ**を加える。作り直さない |
 | `playtest-report.json`（と `playtest/*.png`） | 前の版を Platform が試遊した結果 | 依頼の作業より先に読む（`$game-playtest` §3） |
 | `upstream.json` | このゲームは**派生（リミックス）**で、本流がある | 下の「派生で作るとき」に従う |
 
 - 前の版の `manifest.json` の `sdkVersion` が `1` なら **2 に上げ、`renderer` を書く**（`<kit>/sdk/app-sdk/MIGRATION.md` の「1 → 2」。
   v1 から v2 は追加だけなので、コードの書き換えは要らない）。
-- 前の版の素材（`bundles/`）は `source.zip` に入っていない。要るなら `list_assets` で取り直す（`$game-asset-tools`）。
-- `package.json` の SDK の参照（`file:/workspace/sdk/...`）はそのまま使える（手元では `<kit>/sdk/...` の絶対パスに書き換わっている。§8）。`node_modules` は入っていないので入れ直す。
+- 前の版の `bundles/` の素材もリポジトリに入っている（commit されたファイル）。`bundles.refs.json` で参照している素材だけは
+  リポジトリに無く、素材台帳にある（`$game-3d-and-bundles` §1）。
+- `package.json` の SDK の参照（`file:/workspace/sdk/...`）はそのまま使える（手元では git のフィルタが `<kit>/sdk/...` の絶対パスにして取り出し、commit には `/workspace` の形で入る。§8）。`node_modules` は入っていないので入れ直す。
 - 取得に失敗したら作り直さずにターンを終える（`build-report.json` の `notes` に理由を書き、`outputs/` には何も置かない）。
   前の版を失ったまま別物を作ると、利用者の作品が置き換わってしまう。
 
@@ -186,21 +184,36 @@ ai/<key>.md          # ゲーム内 AI の指示文（`ai.chat` のときだけ�
 
 0. `$game-design` の段階 1〜3（企画・見た目の合意・素材の設計）を先に済ませる。
 1. `<kit>/sdk/sample-app/` を土台にして、**同じ構成**（`src/main.ts` / `server/main.ts` /
-   `manifest.json` / `package.json` / `build.mjs`）でプロジェクトを作る。
+   `manifest.json` / `package.json`）でプロジェクトを作る。sample-app の `package.json` の `scripts` は使わない（消してよい）。
 2. `package.json` の依存は **ローカルパス参照**のまま変えない
    （`"@workspace/app-sdk": "file:/workspace/sdk/app-sdk"` のように、Sandbox 上の実パスへ向ける。
-   手元では `file:<kit>/sdk/app-sdk` の絶対パスにする。§8）。
+   手元では `file:<kit>/sdk/app-sdk` の絶対パスにする。commit には git のフィルタが `/workspace` の形で入れる。§8）。
    使う道具（§4.2）に合わせて足す: 3D は `$game-3d-and-bundles` §2 の `three`、Phaser は `$game-phaser` §1 の `phaser`、
-   物理は `$game-physics` §1 の Rapier。
+   物理は `$game-physics` §1 の Rapier。**rollup / typescript は `package.json` に書かない**（Kit が版を固定し、
+   `@workspace/app-sdk/build-config` から使う。書いても使われない）。
 3. バンドルは `@workspace/app-sdk/build-config` と `@workspace/app-server-sdk/build-config` を
    使う。SDK をバンドルに**含めない**ための設定なので、自前の設定に置き換えない。
    対戦では、画面（`src/main.ts`）が `server/main.ts` の定義を import して `app.space.join()` に渡す
    （ルールは 1 か所に書き、画面の予測と練習モードも同じ定義を使う）。
-4. ビルドして `dist/` を作り、**実際に動かして確かめる**（`node` で読み込める、構文エラーが無い、
+4. **ビルドは必ず `kit build` で行う**（Platform も版を合わせるときに、同じソースから同じ手順でビルドし直す）。
+   プロジェクトのディレクトリで:
+
+   ```sh
+   node /workspace/sdk/app-sdk/build-config/kit.mjs build
+   ```
+   手元では `source/` の上（作業ディレクトリ）で `node <kit>/scripts/kit.mjs build`（中身は同じ。§8.3）。
+
+   `kit build` は `dist/` を消してから、`build.mjs` があればそれを、無ければ既定の手順（`app.bundle.js`、
+   `server/main.ts` があれば `server.bundle.js`、`manifest.json` と `assets/` を `dist/` へ写す）を実行し、続けて `bundles.refs.json` → `dist/bundle-refs.json` と
+   ハッシュ一覧（`dist/.artifact-index.json`。取り込みは使わない）を書く。
+   既定の手順で足りないとき（`bundles/`・`ai/` を写す、画像や音をコードで作る）だけ `build.mjs` を書く。
+   `build.mjs` は build-config の `createAppBundleConfig()` / `createServerBundleConfig()` と `rollup` を使い、
+   プロジェクトのディレクトリを cwd として `dist/` に書く（`dist/` の外・ネットワークに触れない。`dist/` は消してから呼ばれる）。
+   `build.mjs` を `node` で直接実行しない（`bundle-refs.json` と一覧が作られず、合流のビルドと食い違う）。
+   続けて**実際に動かして確かめる**（`node` で読み込める、構文エラーが無い、
    `manifest.json` が仕様どおり、ルールの検査が通る。`$game-playtest`）。
 5. 掲載情報を `listing/` に作る（`$game-listing`。ゲームが出来てから書くと、名前・説明・遊び方・画像が中身と合う）。
 6. `./outputs/` に 3 つのファイルを置く。
-
 ### 4.2 道具を選ぶ（エンジン・描画・物理）
 
 Kit には描画と物理の道具が全部入っている。**どれを使うかは、作りたいゲームに合わせてゲームごとに選ぶ**（既定は無い）。
@@ -283,59 +296,63 @@ MCP のツールが返す URL は署名付きで短命なので、受け取っ�
 
 | パス | 中身 |
 |---|---|
-| `.tokoyo.json` | `app_id`・`session_id`・`base_revision_id`（取り込んだ版）・`kit_root`（`<kit>`）ほか。手で書き換えない |
-| `source/` | 作るプロジェクト（`source.zip` の中身）。`package.json` の SDK の参照は `file:<kit>/sdk/<pkg>` の絶対パス。Skill や §4 に `file:/workspace/sdk/<pkg>` とあれば `<kit>` の実パスに読み替える（`pack` が `/workspace` の形へ戻す） |
-| `input/` | 前の版の試遊の結果（`playtest-report.json` と `playtest/`。`$game-playtest` §3）とマージの材料（`merge-report.json` ほか。`$game-merge`） |
-| `assets-cache/` | 素材ツールの `download_url` から取った素材。小さいものは `source/assets/` か `source/bundles/` へコピーする（素材の `suggested_path` は `source/` からの相対）。大きいものはコピーせず `source/bundles.refs.json` で参照する（§2） |
-| `outputs/` | 送る 3 つ（§2） |
-| `review/` | 届いた提案を読むための版（`kit.mjs review`。§8.6）。送らない |
+| `.tokoyo.json` | `app_id`・`session_id`・`thread_ref`（push する branch）・`base_commit_oid`（取り込んだスレッドの head）・`kit_root`（`<kit>`）ほか。手で書き換えない |
+| `source/` | 作るプロジェクト = **git のリポジトリ**（branch は手元のスレッド `thread/<session>`）。`package.json` の SDK の参照は手元では `file:<kit>/sdk/<pkg>` の絶対パスで、commit には git のフィルタが正規形（`file:/workspace/sdk/<pkg>`）で入れる。Skill や §4 に `file:/workspace/sdk/<pkg>` とあれば `<kit>` の実パスに読み替える。画像・音・3D などは `.gitattributes` の規則で Git LFS に入る |
+| `input/` | 前の版の試遊の結果（`playtest-report.json` と `playtest/`。`$game-playtest` §3） |
+| `assets-cache/` | 素材ツールの `download_url` から取った素材。台帳の素材を使うなら `kit.mjs assets add --url <download_url> --sha256 <sha256> --path <source/ からの相対パス>` で `source/` の下に置いて commit する（実体は台帳にあるので送り直されない）。大きいものは置かず `source/bundles.refs.json` で参照する（§2） |
+| `outputs/` | 送る 3 つ（`source.bundle`・`dist.tar.gz`・`build-report.json`） |
+
+git と Git LFS（`git lfs version`）が要る。commit の作者は `clone` が Platform の決めた本人（`get_git_bundles` の `author`）にしてある。
+**作者を変えない**（`user.name` / `user.email` を書き換えない・他人の commit を `--author` で作らない）。本人以外の作者・コミッターの commit は Platform が断る。
 
 ### 8.2 素材ツール
 
 `$game-asset-tools` のツールは `tokoyo` の同名のツールで、**どれも `app_id`（`.tokoyo.json`）を渡す**。
 手元には内蔵の画像生成が無いので、画像は `generate_image` で作る。
+LFS の実体を上げ下ろしするので、最初に一度 `node <kit>/scripts/kit.mjs login` でログインしておく（ブラウザで許可する。MCP のログインとは別）。
 
 ### 8.3 取得 → 作る → 検査 → 送信
 
-1. **取得**: `get_app({ app_id })` で `head_revision_id` を見る。`.tokoyo.json` の `base_revision_id` と違えば
-   `download_source({ app_id })` → `kit.mjs pull --url <url> --sha256 <sha256> --revision-id <revision_id>`
-   （`source/` を置き換える。`node_modules` は残る）。結果の `playtest` が null でなければ
-   `--playtest-url <playtest.url> --playtest-shots <playtest.screenshots をカンマでつないだもの>` も付ける（`input/` に試遊の結果が置かれる）。**手元に送っていない変更があるなら上書きせず §8.4 で合わせる。**
-2. **作る**: `source/` で `npm install`（または `bun install`）してからビルドする。依存は足さない（§3）。
-3. **出力**: `source/dist/` を作り、`source/listing/` の掲載情報を用意し（`$game-listing`。今の値は `get_app` の `listing`）、
+1. **取得**: `get_git_bundles({ app_id })` の結果の JSON をそのまま渡す。作業ディレクトリがまだ無ければ新しいディレクトリで
+   `kit.mjs clone --bundles '<JSON>'`、あれば `kit.mjs pull --bundles '<JSON>'`（`git pull --rebase` と同じ。新しい bundle だけを取る）。
+   `pull` は commit していない変更があると断るので、先に `git commit` する。結果の `status` が `conflict` なら §8.4。
+   head の試遊の結果があれば `input/` に置かれる。
+2. **作る**: `source/` で `npm install`（または `bun install`）してから、`kit.mjs build` でビルドする
+   （§4.1 の 4. の `kit build` と同じもの。`build.mjs` を直接実行しない）。依存は足さない（§3）。区切りごとに `git commit` する。
+3. **出力**: 変更を `git commit` し、`kit.mjs build` で `source/dist/` を作り、`source/listing/` の掲載情報を用意し（`$game-listing`。今の値は `get_app` の `listing`）、
    `outputs/build-report.json` を書き（§2）、`kit.mjs pack` を実行する。
-   `pack` は `outputs/source.zip` と `outputs/dist.tar.gz` を作り、`begin_build` に渡す引数（`files` ほか）を JSON で出す。
+   `pack` は `outputs/source.bundle`（取り込んだ head からの新しい commit だけ）と `outputs/dist.tar.gz` を作り、`begin_build` に渡す引数
+   （`files`・`commit_oid`・`base_commit_oid` ほか）を JSON で出す。未 commit の変更・新しい commit が無いときは断る。
 4. **検査**: `kit.mjs check`（取り込み + 静的検証。Platform と同じ検証器）。落ちたら直して 3. からやり直す。
    通っても Platform 側で必ず検証される（動的検証は Platform だけが行う）。
-5. **送信**: `begin_build({ app_id, base_revision_id, message, request_key, ...pack の出力 })` → 返った `upload_urls` を
-   `kit.mjs upload --urls '<upload_urls の JSON>'` → `submit_build({ job_id })` → `get_build({ job_id })` を 3 秒ごとに
+5. **送信**: `begin_build({ app_id, message, request_key, ...pack の出力 })` → 返った `upload_urls` を
+   `kit.mjs upload --urls '<upload_urls の JSON>'`（LFS の実体を先に上げてから 3 点を PUT する）→ `submit_build({ job_id })` → `get_build({ job_id })` を 3 秒ごとに
    `ready` / `failed` / `cancelled` になるまで呼ぶ（10 分で打ち切り、利用者に伝える）。`message` は利用者向けの 1 行の説明、`request_key` は送信ごとに新しい UUID
    （`node -e "console.log(crypto.randomUUID())"`。同じ送信のやり直しには同じ値を使う）。
 6. **結果**: `ready` かつ `landed: true` なら、**制作画面をブラウザで開く**:
    `kit.mjs open --url <editor_url>`（この会話で最初に `ready` になったときだけ。制作画面は開いたままでも新しい版が届くので、
    2 回目以降は開かない。開けない環境では `opened: false` が返るだけで失敗ではない。`open` がエラーで終わっても止まらない）。開けたかどうかに関わらず、
-   **`editor_url` を返事の最後に目立つ形で毎回示す**（例: 「▶ 制作画面で試遊する: <editor_url>」）。そのあと `.tokoyo.json` の
-   `base_revision_id` を `kit.mjs pull` で新しい版に揃える。`failed` なら `validation[].report_url` を取得して読み、直して 3. から。
-   `ready` でも `landed: false` なら、先に別の版が着地している（下の `REVISION_CONFLICT` と同じ扱い）。
+   **`editor_url` を返事の最後に目立つ形で毎回示す**（例: 「▶ 制作画面で試遊する: <editor_url>」）。そのあと 1. の `pull` で
+   取り込み直す（次の push の `base_commit_oid` になる）。`failed` なら `validation[].report_url` を取得して読み、直して 3. から。
 
-### 8.4 先に進んでいたとき（`REVISION_CONFLICT`）
+### 8.4 先に進んでいたとき（`STALE_BASE`）
 
-`begin_build` が `REVISION_CONFLICT`（`head_revision_id` 付き）を返したら、手元の変更を新しい head と合わせてから送り直す:
+`begin_build` / `submit_build` が `STALE_BASE` を返したら、スレッドの head が取り込んだ後に進んでいる（制作画面のチャットなど）。普通の git と同じく載せ直す:
 
-1. `download_source({ app_id, revision_id: <base_revision_id> })`（base）と `download_source({ app_id })`（head）の `url` / `sha256` を得る。
-2. `kit.mjs merge-inputs --base-url <base の url> --base-sha256 <sha256> --ours-url local --theirs-url <head の url> --theirs-sha256 <sha256> --theirs-revision-id <head の revision_id> --rebase --title '<送ろうとした変更>'`
-3. `$game-merge` で解く（合わせた結果は `source/` に展開済み。`$game-merge` の手順 2 は済んでいる）→ §8.3 の 2. から。
+1. `get_git_bundles({ app_id })` → `kit.mjs pull --bundles '<JSON>'`（手元の commit を新しい head の上に載せ直す）。
+2. `status` が `conflict` なら、示されたファイルの衝突を解き（`git diff` で両方の変更を見る。依頼の意図を残す）、`git add` → `git rebase --continue`。
+3. §8.3 の 2. から送り直す（`pack` の `base_commit_oid` は新しい head になっている）。
 
-**本流（リミックス元）の新しい公開版を取り込む**ときは `get_merge_inputs({ app_id })` の `base` / `ours` / `theirs`
-（それぞれ `revision_id` / `url` / `sha256`。`base` は null のことがある）で
-`kit.mjs merge-inputs --base-url <base.url または none> --base-sha256 <base.sha256> --base-revision-id <base.revision_id> --ours-url <ours.url> --ours-sha256 <ours.sha256> --ours-revision-id <ours.revision_id> --theirs-url <theirs.url> --theirs-sha256 <theirs.sha256> --theirs-revision-id <theirs.revision_id> --title '<upstream.title> v<upstream.version_no> を取り込む'`
-を実行し、`$game-merge` で解いて送る（`pack` が `merge_theirs_revision_id` を出す）。手元に送っていない変更があるなら `--ours-url local`（`--ours-revision-id` は付けない）。
+**本流（リミックス元）の新しい公開版を取り込む**ときは `sync_upstream({ app_id, request_key })`（Platform が合流する）。終わったら 1. で取り込み直す。
 
 ### 8.5 ほかのエラー
 
 | エラー | すること |
 |---|---|
-| `SDK_VERSION_DEPRECATED`（`kit_outdated`） | Kit が古い。利用者に Kit の更新（Claude Code: `/plugin marketplace update`、Codex: プラグインの更新）を頼む。更新後は新しい Kit の `scripts/kit.mjs` で `get_sdk` → `setup` → `link`（`source/` の参照と `.tokoyo.json` を新しい Kit へ向ける）をやり直す |
+| `SDK_VERSION_DEPRECATED`（`kit_outdated`） | Kit が古い。利用者に Kit の更新（Claude Code: `/plugin marketplace update`、Codex: プラグインの更新）を頼む。更新後は新しい Kit の `scripts/kit.mjs` で `get_sdk` → `setup` → `link`（`.tokoyo.json`・git のフィルタと資格情報・`package.json` の参照を新しい Kit へ向ける）をやり直す |
+| `BUNDLE_REJECTED`（`author_mismatch`） | 本人以外の作者・コミッターの commit がある。`git rebase --exec 'git commit --amend --no-edit --reset-author' <base_commit_oid>` で本人に直して 3. から |
+| `BUNDLE_REJECTED`（ほか） | bundle が Platform の保存済みのリポジトリに載らない。`pull` で取り込み直してから 3. から |
+| `LFS_OBJECT_MISSING` | LFS の実体が上がっていない。`kit.mjs login` してから `kit.mjs upload` をやり直す |
 | `get_build` が `failed`・`error_code: SDK_VERSION_MISMATCH` | `manifest.json` の `sdkVersion` が今の SDK（この Kit の SDK）と違う。`<kit>/sdk/app-sdk/MIGRATION.md` の手順で上げてから 3. からやり直す |
 | `get_build` が `failed`・`error_code` が取り込みの検査のコード（`MANIFEST_MISSING` / `MANIFEST_UNREADABLE` / `UNREADABLE_ARCHIVE` / `PATH_TRAVERSAL` / `ARTIFACT_TOO_LARGE` / `TOO_MANY_FILES` など） | `outputs/dist.tar.gz` の形が Platform の取り込みを通らない（検証まで進んでいないので report は無い）。`kit.mjs check` で同じ検査を手元で回して直し、3. からやり直す |
 | `QUOTA_EXCEEDED` / `RATE_LIMITED` | 送信や素材の上限（素材の予算は App ごと・UTC の 1 日。結果の `budget.resets_at`）。少し待つよう利用者に伝える。何度も送り直さない |
@@ -354,25 +371,27 @@ GitHub の fork と Pull Request と同じ。**提案を開く・取り下げる
 0. **何を直すか**: 決まっていなければ `list_apps_wanting_help()` → `list_discussions({ app_id, help_wanted: true })` から選ぶ
    （作者が「手を貸してほしい」と出している話題）。提案には 1 つの目的だけを入れ、関係ない差分を作らない。
 1. **リミックス**: `resolve_app({ reference })` → `my_forks` があればそれを使う（新しく fork しない）→
-   `remix.allowed` が true なら `remix({ parent_version_id: remix.version_id, request_key })` → 返った `app_id` で §8.3 の 1.。
+   `remix.allowed` が true なら `remix({ parent_version_id: remix.version_id, request_key })` → 返った `app_id` で §8.3 の 1.（新しいディレクトリで `clone`）。
    `request_key` は新しい UUID（やり直しには同じ値）。false なら `remix.reason` を利用者に伝えて止まる。
-2. **提案する**: 提案できるのは **fork の公開済みの版だけ**（限定公開でよい）。送った変更を公開してもらってから
-   `open_proposal({ app_id, title, body })`（版を省くと公開中の版）。未公開なら `fork_not_published` と `editor_url` が返る。
-   返事は `get_proposal` で読み、直したら送って公開してもらい `update_proposal({ proposed_version_id })`。
+2. **提案する**: 提案できるのは **fork の検証を通った版**（公開しなくてよい。本流の作者はその版を試遊できる）。
+   送った変更が `ready` になってから `open_proposal({ app_id, title, body })`（版を省くといちばん新しい検証済みの版）。
+   検証済みの版が無ければ `no_validated_version` が返る。返事は `get_proposal` で読み、直したら送って `ready` を待ち
+   `update_proposal({ proposed_version_id })`。
    応える話題は `discussion_id` に渡す。派生で頼んだ文は既定で提案に添えられる（見せないなら `include_requests: false`）。
    本流に新しい版が出たら `sync_upstream({ app_id, request_key })` で取り込んでから続ける。
    返事・マージの結果・本流の新しい版は `list_notifications` で届く（読んだら `mark_notifications_read`）。
 3. **届いた提案**（自分が本流の編集者）: `get_app` の `proposals.incoming_open_count` → `list_proposals` → `get_proposal`。
-   中身は `get_proposal_inputs` →
-   `kit.mjs review --proposal-id <id> --base-url <base.url または none> --base-sha256 <base.sha256> --ours-url <ours.url> --ours-sha256 <ours.sha256> --theirs-url <theirs.url> --theirs-sha256 <theirs.sha256>`
-   で `review/<id>/` に展開して読む（`changes.json` に変わったファイル。`source/` は変わらない）。
+   中身は `get_proposal_inputs`（提案の commit を本流の `refs/proposals/<id>` に取り込み、base / ours / theirs の commit を返す）→
+   `kit pull` で `fetched_as`（`refs/remotes/tokoyo/proposals/<id>`）に入るので、`source/` で `git diff <base> <theirs>`
+   （提案の変更）と `git diff <base> <ours>`（その間の本流の変更）を読む（base が null なら `git diff <ours> <theirs>`）。
+   ブランチは切り替えない（読むだけ）。
    **マージするかは利用者が決める**。`merge_proposal({ proposal_id, request_key })` は Platform の Agent が衝突を解いて
    ビルドし、検証を通った版が本流の**下書き**に入る（公開はされない。支払い元のクレジットを使う）。進み具合は `get_build({ job_id })`。
 
 | エラー | すること |
 |---|---|
 | `FORBIDDEN`（`remix_not_allowed` / `proposals_closed` / `not_upstream_editor`） | 作者の設定か立場の問題。利用者に伝えて止まる |
-| `INVALID_ACTION`（`fork_not_published` / `version_not_published`） | 公開されていない版。`editor_url` で公開してもらう |
+| `INVALID_ACTION`（`no_validated_version` / `version_not_validated`） | 検証を通っていない版。push して `ready` を待つ |
 | `INVALID_ACTION`（`proposal_already_open`） | 同じ fork から開いている提案がある。`update_proposal` で版を差し替える |
 | `QUOTA_EXCEEDED`（`insufficient_credits`） | マージの支払い元の残高が無い。利用者に伝える |
 | `RATE_LIMITED` | 提案は 1 日 20 件、コメントは 1 日 200 件まで。待つ |

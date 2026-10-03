@@ -9325,52 +9325,41 @@ import { fileURLToPath } from "node:url";
 class ArgsError extends Error {
   name = "ArgsError";
 }
-var MERGE_OPTIONAL = [
-  "body",
-  "base-revision-id",
-  "ours-revision-id",
-  "base-sha256",
-  "ours-sha256",
-  "theirs-sha256"
-];
 var COMMANDS = {
   setup: { required: ["sdk-url", "sha256"], optional: [], switches: [] },
-  init: {
-    required: ["app-id", "session-id"],
-    optional: ["head-revision-id", "mcp-url"],
-    switches: []
-  },
-  pull: {
-    required: ["url", "sha256", "revision-id"],
-    optional: ["playtest-url", "playtest-shots"],
-    switches: []
-  },
-  "merge-inputs": {
-    required: ["base-url", "ours-url", "theirs-url", "theirs-revision-id", "title"],
-    optional: MERGE_OPTIONAL,
-    switches: ["rebase"]
-  },
+  clone: { required: ["bundles"], optional: ["mcp-url"], switches: [] },
+  pull: { required: ["bundles"], optional: [], switches: [] },
+  build: { required: [], optional: [], switches: [] },
   pack: { required: [], optional: [], switches: [] },
   check: { required: [], optional: [], switches: [] },
   upload: { required: ["urls"], optional: [], switches: [] },
   link: { required: [], optional: [], switches: [] },
-  review: {
-    required: ["proposal-id", "base-url", "ours-url", "ours-sha256", "theirs-url", "theirs-sha256"],
-    optional: ["base-sha256"],
-    switches: []
-  },
+  login: { required: [], optional: ["mcp-url"], switches: [] },
+  credential: { actions: ["get", "store", "erase"], required: [], optional: [], switches: [] },
+  "sdk-refs": { required: [], optional: [], switches: ["clean", "smudge"] },
+  assets: { actions: ["add"], required: ["url", "sha256", "path"], optional: [], switches: [] },
   open: { required: ["url"], optional: [], switches: [] },
   "codex-config": { required: [], optional: [], switches: [] }
 };
 var USAGE = `usage: node <kit>/scripts/kit.mjs <command> [--flag value]…
 commands: ${Object.keys(COMMANDS).join(", ")}`;
 function parseArgs(argv) {
-  const [command, ...rest] = argv;
+  const [command, ...afterCommand] = argv;
   if (!command || !(command in COMMANDS)) {
     throw new ArgsError(`unknown command ${JSON.stringify(command ?? "")}
 ${USAGE}`);
   }
   const spec = COMMANDS[command];
+  let action = null;
+  let rest = afterCommand;
+  if (spec.actions) {
+    const [given, ...more] = afterCommand;
+    if (given === undefined || !spec.actions.includes(given)) {
+      throw new ArgsError(`${command} needs one of ${spec.actions.join(" / ")}, got ${JSON.stringify(given ?? "")}`);
+    }
+    action = given;
+    rest = more;
+  }
   const flags = {};
   const switches = [];
   for (let index = 0;index < rest.length; index += 1) {
@@ -9396,7 +9385,7 @@ ${USAGE}`);
   if (missing.length > 0) {
     throw new ArgsError(`${command} needs ${missing.map((name) => `--${name}`).join(", ")}`);
   }
-  return { command, flags, switches };
+  return { command, action, flags, switches };
 }
 function splitFlag(flag) {
   const equals = flag.indexOf("=");
@@ -9404,59 +9393,18 @@ function splitFlag(flag) {
 }
 
 // frontend/packages/creator-kit/src/commands.ts
-import { createHash as createHash3 } from "node:crypto";
-import { existsSync as existsSync3 } from "node:fs";
-import { cp, mkdir as mkdir2, readdir as readdir3, readFile as readFile3, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
-import { dirname as dirname3, join as join5 } from "node:path";
+import { createHash as createHash4 } from "node:crypto";
+import { existsSync as existsSync6 } from "node:fs";
+import { cp, mkdir as mkdir4, readdir as readdir4, readFile as readFile6, rm as rm4, writeFile as writeFile5 } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname as dirname3, join as join7 } from "node:path";
 
-// frontend/packages/creator-kit/src/browser.ts
+// frontend/packages/app-sdk/build-config/kit-build.ts
 import { spawn } from "node:child_process";
-
-class EditorUrlError extends Error {
-  name = "EditorUrlError";
-}
-var LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-function assertEditorUrl(url, appId) {
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new EditorUrlError(`not an editor URL (cannot parse): ${url}`);
-  }
-  const local = parsed.protocol === "http:" && LOCAL_HOSTS.has(parsed.hostname);
-  if (parsed.protocol !== "https:" && !local) {
-    throw new EditorUrlError(`not an editor URL (https only, except localhost): ${url}`);
-  }
-  if (parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "") {
-    throw new EditorUrlError(`not an editor URL (no credentials, query or fragment): ${url}`);
-  }
-  if (parsed.pathname !== `/create/${appId}`) {
-    throw new EditorUrlError(`not the editor of this App (${appId}); pass the editor_url that get_build returned: ${url}`);
-  }
-  return parsed.href;
-}
-var OPEN_WAIT_MS = 5000;
-function openInBrowser(url) {
-  const [command, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: "ignore", detached: true });
-    const timer = setTimeout(() => {
-      child.unref();
-      resolve(true);
-    }, OPEN_WAIT_MS);
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      console.error(`kit.mjs open: could not start ${command}: ${error.message}`);
-      resolve(false);
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timer);
-      if (code !== 0)
-        console.error(`kit.mjs open: ${command} exited with ${code}`);
-      resolve(code === 0);
-    });
-  });
-}
+import { existsSync } from "node:fs";
+import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire as createRequire2 } from "node:module";
+import { dirname, join, relative } from "node:path";
 
 // frontend/node_modules/zod/v4/classic/external.js
 var exports_external = {};
@@ -24046,6 +23994,7 @@ ${lines.join(`
 `)}
 `));
 }
+var ARTIFACT_INDEX_PATH = ".artifact-index.json";
 var SERVER_BUNDLE_PATH = "server.bundle.js";
 var artifactIndexSchema = exports_external.strictObject({
   artifactHash: exports_external.string().regex(SHA256_HEX),
@@ -24144,6 +24093,7 @@ function planBundles(manifest, files) {
 
 // frontend/packages/app-protocol/src/bundle-refs.ts
 var BUNDLE_REFS_PATH = "bundle-refs.json";
+var BUNDLE_REFS_SOURCE_PATH = "bundles.refs.json";
 var bundledPathSchema = artifactPathSchema.refine((path) => {
   const segments = path.split("/");
   return segments.length >= 3 && segments[0] === BUNDLES_DIR;
@@ -25114,6 +25064,50 @@ function validateServerBundle(server, errors3) {
       errors3.push({ code: rule.code, message: rule.why, path: server.path });
     }
   }
+}
+
+// frontend/packages/app-validator/src/driver.ts
+var MIME_BY_EXTENSION = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".wasm": "application/wasm",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".avif": "image/avif",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".mp4": "video/mp4",
+  ".glb": "model/gltf-binary",
+  ".ktx2": "image/ktx2",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".txt": "text/plain",
+  ".map": "application/json"
+};
+function mimeFor(path) {
+  const index = path.lastIndexOf(".");
+  const extension = index === -1 ? "" : path.slice(index).toLowerCase();
+  return MIME_BY_EXTENSION[extension] ?? "application/octet-stream";
+}
+function buildArtifactIndex(files, input) {
+  return artifactIndexSchema.parse({
+    artifactHash: input.artifactHash,
+    entrypoint: input.entrypoint,
+    files: files.map((file2) => ({
+      path: file2.path,
+      sha256: file2.sha256,
+      size: file2.size,
+      mime: mimeFor(file2.path)
+    }))
+  });
 }
 // frontend/packages/app-validator/src/playtest-video.ts
 import { execFile } from "node:child_process";
@@ -39357,6 +39351,169 @@ async function validateArchive(archive, options = {}, ledger = []) {
     files
   };
 }
+// frontend/packages/app-sdk/build-config/artifact-index.ts
+async function buildDistIndex(dist, { entrypoint }) {
+  const files = dist.filter((file2) => file2.path !== ARTIFACT_INDEX_PATH);
+  if (!files.some((file2) => file2.path === entrypoint)) {
+    throw new Error(`kit build: the entrypoint "${entrypoint}" is not in dist/`);
+  }
+  const digests = await Promise.all(files.map(async (file2) => ({
+    path: file2.path,
+    sha256: await hashArtifactFile(file2.bytes),
+    size: file2.bytes.byteLength,
+    bytes: file2.bytes
+  })));
+  digests.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  return buildArtifactIndex(digests, {
+    artifactHash: await computeArtifactHash(digests),
+    entrypoint
+  });
+}
+
+// frontend/packages/app-sdk/build-config/kit-build.ts
+class KitBuildError extends Error {
+  name = "KitBuildError";
+}
+var GAME_BUILD_SCRIPT = "build.mjs";
+var DEFAULT_BUILD_SCRIPT = "default-build.mjs";
+var MANIFEST_PATH2 = "manifest.json";
+async function kitBuild(source) {
+  const dist = join(source, "dist");
+  await rm(dist, { recursive: true, force: true });
+  const gameScript = join(source, GAME_BUILD_SCRIPT);
+  await runNode(existsSync(gameScript) ? gameScript : defaultBuildScript(source), source);
+  const manifestPath = join(dist, MANIFEST_PATH2);
+  if (!existsSync(manifestPath)) {
+    throw new KitBuildError(`the build left no ${MANIFEST_PATH2} at the root of dist/`);
+  }
+  await copyBundleRefs(source, dist);
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (typeof manifest.entrypoint !== "string") {
+    throw new KitBuildError(`dist/${MANIFEST_PATH2} has no entrypoint`);
+  }
+  const index = await buildDistIndex(await readDist(dist), { entrypoint: manifest.entrypoint });
+  await writeFile(join(dist, ARTIFACT_INDEX_PATH), `${JSON.stringify(index, null, 2)}
+`);
+  return { dist, artifactHash: index.artifactHash };
+}
+function defaultBuildScript(source) {
+  const config2 = createRequire2(join(source, "package.json")).resolve("@workspace/app-sdk/build-config");
+  return join(dirname(config2), DEFAULT_BUILD_SCRIPT);
+}
+function runNode(script, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("node", [script], { cwd, stdio: ["ignore", 2, 2] });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0)
+        resolve();
+      else
+        reject(new KitBuildError(`node ${relative(cwd, script) || script} failed (${signal ?? `exit ${code}`})`));
+    });
+  });
+}
+async function copyBundleRefs(source, dist) {
+  const path = join(source, BUNDLE_REFS_SOURCE_PATH);
+  if (!existsSync(path))
+    return;
+  let document2;
+  try {
+    document2 = JSON.parse(await readFile(path, "utf8"));
+  } catch (error51) {
+    throw new KitBuildError(`${BUNDLE_REFS_SOURCE_PATH} is not JSON: ${String(error51)}`);
+  }
+  const parsed = bundleRefsSchema.safeParse(document2);
+  if (!parsed.success) {
+    throw new KitBuildError(`${BUNDLE_REFS_SOURCE_PATH} must be {"refs": {"bundles/<name>/<file>": "<asset id>"}}`);
+  }
+  await writeFile(join(dist, BUNDLE_REFS_PATH), `${JSON.stringify(parsed.data, null, 2)}
+`);
+}
+async function readDist(dist) {
+  const entries = await readdir(dist, { withFileTypes: true, recursive: true });
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile())
+      continue;
+    const absolute = join(entry.parentPath, entry.name);
+    files.push({
+      path: relative(dist, absolute).split("\\").join("/"),
+      bytes: new Uint8Array(await readFile(absolute))
+    });
+  }
+  return files;
+}
+
+// frontend/packages/creator-kit/src/approval.ts
+var ASK_A_PERSON_TOOLS = [
+  "open_proposal",
+  "close_proposal",
+  "comment_proposal",
+  "merge_proposal"
+];
+function codexApprovalToml(pluginId, server) {
+  const table = `plugins."${pluginId}".mcp_servers.${server}`;
+  return [
+    `[${table}]`,
+    'default_tools_approval_mode = "writes"',
+    ...ASK_A_PERSON_TOOLS.flatMap((tool) => [
+      "",
+      `[${table}.tools.${tool}]`,
+      'approval_mode = "approve"'
+    ])
+  ].join(`
+`);
+}
+
+// frontend/packages/creator-kit/src/browser.ts
+import { spawn as spawn2 } from "node:child_process";
+
+class EditorUrlError extends Error {
+  name = "EditorUrlError";
+}
+var LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+function assertEditorUrl(url2, appId) {
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    throw new EditorUrlError(`not an editor URL (cannot parse): ${url2}`);
+  }
+  const local = parsed.protocol === "http:" && LOCAL_HOSTS.has(parsed.hostname);
+  if (parsed.protocol !== "https:" && !local) {
+    throw new EditorUrlError(`not an editor URL (https only, except localhost): ${url2}`);
+  }
+  if (parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "") {
+    throw new EditorUrlError(`not an editor URL (no credentials, query or fragment): ${url2}`);
+  }
+  if (parsed.pathname !== `/create/${appId}`) {
+    throw new EditorUrlError(`not the editor of this App (${appId}); pass the editor_url that get_build returned: ${url2}`);
+  }
+  return parsed.href;
+}
+var OPEN_WAIT_MS = 5000;
+function openInBrowser(url2) {
+  const [command, args] = process.platform === "darwin" ? ["open", [url2]] : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url2]] : ["xdg-open", [url2]];
+  return new Promise((resolve) => {
+    const child = spawn2(command, args, { stdio: "ignore", detached: true });
+    const timer = setTimeout(() => {
+      child.unref();
+      resolve(true);
+    }, OPEN_WAIT_MS);
+    child.once("error", (error51) => {
+      clearTimeout(timer);
+      console.error(`kit.mjs open: could not start ${command}: ${error51.message}`);
+      resolve(false);
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      if (code !== 0)
+        console.error(`kit.mjs open: ${command} exited with ${code}`);
+      resolve(code === 0);
+    });
+  });
+}
+
 // frontend/packages/creator-kit/src/check.ts
 async function checkDist(archive) {
   const { report } = await validateArchive(archive, {}, "unresolved");
@@ -39373,6 +39530,74 @@ function summarize(report) {
   }
   return lines.join(`
 `);
+}
+
+// frontend/packages/creator-kit/src/credential.ts
+function parseCredentialRequest(text) {
+  const request = {};
+  for (const line of text.split(`
+`)) {
+    const equals = line.indexOf("=");
+    if (equals > 0)
+      request[line.slice(0, equals)] = line.slice(equals + 1);
+  }
+  return request;
+}
+function isLfsRequest(request, lfsUrl) {
+  const { protocol, host, path } = request;
+  if (!protocol || !host || path === undefined)
+    return false;
+  const base = new URL(lfsUrl);
+  if (`${protocol}:` !== base.protocol || host !== base.host)
+    return false;
+  const asked = `/${path.replace(/^\/+/, "").split("?")[0]}`;
+  const root = base.pathname.replace(/\/+$/, "");
+  return asked === root || asked.startsWith(`${root}/`);
+}
+var CREDENTIAL_USERNAME = "tokoyo-kit";
+
+// frontend/packages/creator-kit/src/git.ts
+import { spawn as spawn3 } from "node:child_process";
+
+class GitError extends Error {
+  name = "GitError";
+}
+var runGit = (args, options) => new Promise((resolve, reject) => {
+  const child = spawn3("git", [...args], {
+    cwd: options.cwd,
+    env: { ...process.env, ...options.env },
+    stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"]
+  });
+  const stdout = [];
+  const stderr = [];
+  child.stdout?.on("data", (chunk) => stdout.push(chunk));
+  child.stderr?.on("data", (chunk) => stderr.push(chunk));
+  child.on("error", reject);
+  child.on("close", (code) => resolve({
+    code: code ?? 1,
+    stdout: Buffer.concat(stdout).toString("utf8"),
+    stderr: Buffer.concat(stderr).toString("utf8")
+  }));
+  if (child.stdin) {
+    child.stdin.on("error", (error51) => {
+      if (error51.code !== "EPIPE")
+        reject(error51);
+    });
+    child.stdin.end(options.input);
+  }
+});
+async function gitOk(git, cwd, args, input) {
+  const result = await git(args, { cwd, input });
+  if (result.code !== 0) {
+    throw new GitError(`git ${args[0]} failed (exit ${result.code}): ${result.stderr.trim()}`);
+  }
+  return result.stdout.trim();
+}
+async function gitTest(git, cwd, args) {
+  return (await git(args, { cwd })).code === 0;
+}
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 // frontend/packages/creator-kit/src/http.ts
@@ -39399,7 +39624,7 @@ async function upload(name, url2, bytes, contentType, fetchImpl = globalThis.fet
 }
 
 // frontend/packages/creator-kit/src/revision.ts
-var KIT_REVISION = 2;
+var KIT_REVISION = 4;
 var CANONICAL_KIT_ROOT = "/workspace";
 
 // frontend/packages/creator-kit/src/kit-repo.ts
@@ -39409,217 +39634,243 @@ var KIT_PLUGIN_ROOT = `plugins/${KIT_PLUGIN_NAME}`;
 var encoder = new TextEncoder;
 var decoder2 = new TextDecoder;
 
-// frontend/packages/creator-kit/src/merge.ts
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+// frontend/packages/creator-kit/src/login.ts
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync as existsSync2 } from "node:fs";
+import { chmod, mkdir, readFile as readFile2, rename, writeFile as writeFile2 } from "node:fs/promises";
+import { createServer } from "node:http";
+import { join as join2 } from "node:path";
+var DEFAULT_MCP_URL = "https://tokoyo.games/mcp/creator";
+var REDIRECT_URI = "http://127.0.0.1:43126/callback";
+var REFRESH_MARGIN_MS = 60000;
+var LOGIN_TIMEOUT_MS = 5 * 60000;
+var CREDENTIALS_FILE = "credentials.json";
 
-// frontend/packages/creator-kit/src/zip.ts
-import { deflateRawSync, inflateRawSync } from "node:zlib";
-
-class ZipError extends Error {
-  name = "ZipError";
+class LoginError extends Error {
+  name = "LoginError";
 }
-var ZIP_MAX_FILES = 2000;
-var ZIP_MAX_BYTES = 100 * 1024 * 1024;
-var LOCAL_SIGNATURE = 67324752;
-var CENTRAL_SIGNATURE = 33639248;
-var END_SIGNATURE = 101010256;
-var LOCAL_HEADER = 30;
-var CENTRAL_HEADER = 46;
-var END_RECORD = 22;
-var MAX_COMMENT = 65535;
-var UTF8_FLAG = 2048;
-var ENCRYPTED_FLAG = 1;
-var STORED = 0;
-var DEFLATE = 8;
-var DOS_DATE = 0 << 9 | 1 << 5 | 1;
-var UNIX_VERSION_MADE_BY = 3 << 8 | 20;
-var REGULAR_FILE = 33188;
-var FILE_TYPE_MASK = 61440;
-var SYMLINK = 40960;
-var CRC_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let n = 0;n < 256; n += 1) {
-    let c = n;
-    for (let k = 0;k < 8; k += 1)
-      c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-function crc32(bytes) {
-  let crc = 4294967295;
-  for (const byte of bytes)
-    crc = CRC_TABLE[(crc ^ byte) & 255] ^ crc >>> 8;
-  return (crc ^ 4294967295) >>> 0;
+async function readLogins(configDir) {
+  const path = join2(configDir, CREDENTIALS_FILE);
+  if (!existsSync2(path))
+    return {};
+  const parsed = JSON.parse(await readFile2(path, "utf8"));
+  return parsed.logins ?? {};
 }
-var encoder2 = new TextEncoder;
-var decoder3 = new TextDecoder("utf-8", { fatal: true });
-function writeZip(files) {
-  const sorted = [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-  const locals = [];
-  const centrals = [];
-  let offset = 0;
-  for (const file2 of sorted) {
-    assertSafePath2(file2.path, false);
-    const name = encoder2.encode(file2.path);
-    const deflated = new Uint8Array(deflateRawSync(file2.bytes));
-    const method = deflated.byteLength < file2.bytes.byteLength ? DEFLATE : STORED;
-    const body = method === DEFLATE ? deflated : file2.bytes;
-    const entry = {
-      name,
-      method,
-      crc: crc32(file2.bytes),
-      compressed: body.byteLength,
-      size: file2.bytes.byteLength
-    };
-    const local = header(LOCAL_HEADER, name, (view2) => {
-      view2.setUint32(0, LOCAL_SIGNATURE, true);
-      writeCommon(view2, 4, entry);
-    });
-    locals.push(local, body);
-    centrals.push(header(CENTRAL_HEADER, name, (view2) => {
-      view2.setUint32(0, CENTRAL_SIGNATURE, true);
-      view2.setUint16(4, UNIX_VERSION_MADE_BY, true);
-      writeCommon(view2, 6, entry);
-      view2.setUint32(38, REGULAR_FILE << 16 >>> 0, true);
-      view2.setUint32(42, offset, true);
-    }));
-    offset += local.byteLength + body.byteLength;
-  }
-  const centralSize = centrals.reduce((sum, part) => sum + part.byteLength, 0);
-  const end = new Uint8Array(END_RECORD);
-  const view = new DataView(end.buffer);
-  view.setUint32(0, END_SIGNATURE, true);
-  view.setUint16(8, sorted.length, true);
-  view.setUint16(10, sorted.length, true);
-  view.setUint32(12, centralSize, true);
-  view.setUint32(16, offset, true);
-  return concat([...locals, ...centrals, end]);
+async function writeLogin(configDir, mcpUrl, login) {
+  const logins = await readLogins(configDir);
+  if (login === null)
+    delete logins[mcpUrl];
+  else
+    logins[mcpUrl] = login;
+  await mkdir(configDir, { recursive: true, mode: 448 });
+  const path = join2(configDir, CREDENTIALS_FILE);
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile2(temporary, `${JSON.stringify({ logins }, null, 2)}
+`, { mode: 384 });
+  await chmod(temporary, 384);
+  await rename(temporary, path);
 }
-function writeCommon(view, at, entry) {
-  view.setUint16(at, 20, true);
-  view.setUint16(at + 2, UTF8_FLAG, true);
-  view.setUint16(at + 4, entry.method, true);
-  view.setUint16(at + 6, 0, true);
-  view.setUint16(at + 8, DOS_DATE, true);
-  view.setUint32(at + 10, entry.crc, true);
-  view.setUint32(at + 14, entry.compressed, true);
-  view.setUint32(at + 18, entry.size, true);
-  view.setUint16(at + 22, entry.name.byteLength, true);
+async function getJson(fetch2, url2) {
+  const response = await fetch2(url2);
+  if (!response.ok)
+    throw new LoginError(`${url2} returned ${response.status}`);
+  return await response.json();
 }
-function header(size, name, fill) {
-  const out = new Uint8Array(size + name.byteLength);
-  fill(new DataView(out.buffer));
-  out.set(name, size);
-  return out;
+function endpoint(metadata, key) {
+  const value = metadata[key];
+  if (typeof value !== "string")
+    throw new LoginError(`the authorization server has no ${key}`);
+  return value;
 }
-function readZip(archive) {
-  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-  const end = findEnd(view);
-  const count = view.getUint16(end + 10, true);
-  let at = view.getUint32(end + 16, true);
-  if (count === 65535 || at === 4294967295)
-    throw new ZipError("ZIP64 archives are not supported");
-  if (count > ZIP_MAX_FILES)
-    throw new ZipError(`${count} entries; the limit is ${ZIP_MAX_FILES}`);
-  const files = [];
-  const seen = new Set;
-  let total = 0;
-  for (let index = 0;index < count; index += 1) {
-    const entry = readCentral(view, archive, at);
-    at = entry.next;
-    if (seen.has(entry.path))
-      throw new ZipError(`duplicate path ${entry.path}`);
-    seen.add(entry.path);
-    if (entry.directory)
-      continue;
-    total += entry.size;
-    if (total > ZIP_MAX_BYTES)
-      throw new ZipError(`over ${ZIP_MAX_BYTES} bytes uncompressed`);
-    files.push({ path: entry.path, bytes: extract(view, archive, entry) });
-  }
-  return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-}
-function findEnd(view) {
-  const lowest = Math.max(0, view.byteLength - END_RECORD - MAX_COMMENT);
-  for (let at = view.byteLength - END_RECORD;at >= lowest; at -= 1) {
-    if (view.getUint32(at, true) === END_SIGNATURE)
-      return at;
-  }
-  throw new ZipError("not a zip archive");
-}
-function readCentral(view, archive, at) {
-  if (at + CENTRAL_HEADER > view.byteLength || view.getUint32(at, true) !== CENTRAL_SIGNATURE) {
-    throw new ZipError("broken zip: central directory");
-  }
-  const flags = view.getUint16(at + 8, true);
-  if (flags & ENCRYPTED_FLAG)
-    throw new ZipError("encrypted entries are not supported");
-  const nameLength = view.getUint16(at + 28, true);
-  const extraLength = view.getUint16(at + 30, true);
-  const commentLength = view.getUint16(at + 32, true);
-  const mode = view.getUint32(at + 38, true) >>> 16;
-  const raw = decodeName(archive.subarray(at + CENTRAL_HEADER, at + CENTRAL_HEADER + nameLength));
-  if ((mode & FILE_TYPE_MASK) === SYMLINK)
-    throw new ZipError(`unsafe path ${raw} (symlink)`);
-  const directory = raw.endsWith("/");
-  const path = directory ? raw.slice(0, -1) : raw;
-  assertSafePath2(path, true);
+async function discover(fetch2, mcpUrl) {
+  const resource = new URL(mcpUrl);
+  const protectedResource = await getJson(fetch2, `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname}`);
+  const issuer = protectedResource.authorization_servers?.[0];
+  if (typeof issuer !== "string")
+    throw new LoginError(`${mcpUrl} names no authorization server`);
+  const parsed = new URL(issuer);
+  const path = parsed.pathname === "/" ? "" : parsed.pathname;
+  const metadata = await getJson(fetch2, `${parsed.origin}/.well-known/oauth-authorization-server${path}`);
   return {
-    path,
-    directory,
-    method: view.getUint16(at + 10, true),
-    crc: view.getUint32(at + 16, true),
-    compressed: view.getUint32(at + 20, true),
-    size: view.getUint32(at + 24, true),
-    localOffset: view.getUint32(at + 42, true),
-    next: at + CENTRAL_HEADER + nameLength + extraLength + commentLength
+    issuer,
+    authorization: endpoint(metadata, "authorization_endpoint"),
+    token: endpoint(metadata, "token_endpoint"),
+    registration: endpoint(metadata, "registration_endpoint")
   };
 }
-function decodeName(bytes) {
+async function register(fetch2, registration) {
+  const response = await fetch2(registration, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "TOKOYO.games Creator Kit",
+      redirect_uris: [REDIRECT_URI],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none"
+    })
+  });
+  if (!response.ok)
+    throw new LoginError(`registering the Kit returned ${response.status}`);
+  const clientId = (await response.json()).client_id;
+  if (typeof clientId !== "string")
+    throw new LoginError("the registration returned no client_id");
+  return clientId;
+}
+async function requestToken(deps, tokenEndpoint, form) {
+  const response = await deps.fetch(tokenEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(form).toString()
+  });
+  if (!response.ok)
+    throw new LoginError(`the token endpoint returned ${response.status}`);
+  const body = await response.json();
+  if (typeof body.access_token !== "string")
+    throw new LoginError("no access_token was returned");
+  const expiresIn = typeof body.expires_in === "number" ? body.expires_in : 3600;
+  return {
+    access_token: body.access_token,
+    refresh_token: typeof body.refresh_token === "string" ? body.refresh_token : null,
+    expires_at: deps.now() + expiresIn * 1000
+  };
+}
+var base64url3 = (bytes) => bytes.toString("base64url");
+async function login(mcpUrl, deps) {
+  const server = await discover(deps.fetch, mcpUrl);
+  const previous = (await readLogins(deps.configDir))[mcpUrl];
+  const clientId = previous?.issuer === server.issuer && previous.redirect_uri === REDIRECT_URI ? previous.client_id : await register(deps.fetch, server.registration);
+  const verifier = base64url3(randomBytes(32));
+  const state = base64url3(randomBytes(16));
+  const url2 = new URL(server.authorization);
+  url2.search = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: REDIRECT_URI,
+    state,
+    code_challenge: base64url3(createHash("sha256").update(verifier).digest()),
+    code_challenge_method: "S256"
+  }).toString();
+  const code = await deps.authorize(url2.toString(), REDIRECT_URI, state);
+  const tokens = await requestToken(deps, server.token, {
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: REDIRECT_URI,
+    client_id: clientId,
+    code_verifier: verifier
+  });
+  const stored = {
+    issuer: server.issuer,
+    client_id: clientId,
+    redirect_uri: REDIRECT_URI,
+    token_endpoint: server.token,
+    ...tokens
+  };
+  await writeLogin(deps.configDir, mcpUrl, stored);
+  return stored;
+}
+async function accessToken(mcpUrl, deps) {
+  const stored = (await readLogins(deps.configDir))[mcpUrl];
+  if (!stored)
+    return null;
+  if (stored.access_token !== null && stored.expires_at - deps.now() > REFRESH_MARGIN_MS) {
+    return stored.access_token;
+  }
+  if (stored.refresh_token === null)
+    return null;
+  let tokens;
   try {
-    return decoder3.decode(bytes);
+    tokens = await requestToken(deps, stored.token_endpoint, {
+      grant_type: "refresh_token",
+      refresh_token: stored.refresh_token,
+      client_id: stored.client_id
+    });
   } catch (error51) {
-    throw new ZipError(`unsafe path (not UTF-8): ${String(error51)}`);
+    if (!(error51 instanceof LoginError))
+      throw error51;
+    console.error(`kit.mjs: the login expired (${error51.message}); run kit.mjs login`);
+    await writeLogin(deps.configDir, mcpUrl, {
+      ...stored,
+      access_token: null,
+      refresh_token: null,
+      expires_at: 0
+    });
+    return null;
   }
+  await writeLogin(deps.configDir, mcpUrl, {
+    ...stored,
+    ...tokens,
+    refresh_token: tokens.refresh_token ?? stored.refresh_token
+  });
+  return tokens.access_token;
 }
-function extract(view, archive, entry) {
-  const at = entry.localOffset;
-  if (at + LOCAL_HEADER > view.byteLength || view.getUint32(at, true) !== LOCAL_SIGNATURE) {
-    throw new ZipError(`broken zip: local header of ${entry.path}`);
-  }
-  const start = at + LOCAL_HEADER + view.getUint16(at + 26, true) + view.getUint16(at + 28, true);
-  const body = archive.subarray(start, start + entry.compressed);
-  if (body.byteLength !== entry.compressed)
-    throw new ZipError(`broken zip: ${entry.path} is truncated`);
-  const bytes = inflate(entry, body);
-  if (bytes.byteLength !== entry.size || crc32(bytes) !== entry.crc) {
-    throw new ZipError(`broken zip: ${entry.path} failed its CRC`);
-  }
-  return bytes;
+async function forgetAccessToken(mcpUrl, configDir) {
+  const stored = (await readLogins(configDir))[mcpUrl];
+  if (stored)
+    await writeLogin(configDir, mcpUrl, { ...stored, access_token: null, expires_at: 0 });
 }
-function inflate(entry, body) {
-  if (entry.method === STORED)
-    return body.slice();
-  if (entry.method !== DEFLATE) {
-    throw new ZipError(`${entry.path} uses compression method ${entry.method}`);
-  }
-  try {
-    return new Uint8Array(inflateRawSync(body, { maxOutputLength: Math.max(entry.size, 1) }));
-  } catch (error51) {
-    throw new ZipError(`broken zip: ${entry.path} did not inflate (${String(error51)})`);
-  }
+var DONE_PAGE = `<!doctype html><meta charset="utf-8"><title>TOKOYO.games</title>
+<p>ログインしました。このタブを閉じて、エージェントに戻ってください。<br>
+You are logged in. Close this tab and return to your agent.</p>`;
+function loopbackAuthorize(openUrl) {
+  return (url2, redirectUri, state) => new Promise((resolve, reject) => {
+    const redirect = new URL(redirectUri);
+    const finish = (error51, code) => {
+      clearTimeout(timer);
+      server.close();
+      if (error51)
+        reject(error51);
+      else
+        resolve(code);
+    };
+    const server = createServer((request, response) => {
+      const received = new URL(request.url ?? "/", redirect);
+      if (received.pathname !== redirect.pathname) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(DONE_PAGE);
+      const code = received.searchParams.get("code");
+      const denied = received.searchParams.get("error");
+      if (denied)
+        finish(new LoginError(`the login was not allowed (${denied})`));
+      else if (received.searchParams.get("state") !== state || !code) {
+        finish(new LoginError("the login answer did not match this request; run login again"));
+      } else
+        finish(null, code);
+    });
+    const timer = setTimeout(() => finish(new LoginError("the login timed out; run kit.mjs login again")), LOGIN_TIMEOUT_MS);
+    server.on("error", (error51) => finish(new LoginError(`cannot wait for the login on ${redirectUri}: ${error51.message}`)));
+    server.listen(Number(redirect.port), redirect.hostname, () => {
+      openUrl(url2).then((opened) => {
+        if (!opened)
+          console.error(`open this URL to log in: ${url2}`);
+      }, (error51) => finish(error51 instanceof Error ? error51 : new Error(String(error51))));
+    });
+  });
 }
-function assertSafePath2(path, reading) {
-  const segments = path.split("/");
-  const unsafe = path.length === 0 || path.startsWith("/") || /^[A-Za-z]:/.test(path) || path.includes("\\") || segments.some((segment) => segment === "" || segment === ".." || segment === ".git");
-  if (unsafe)
-    throw new ZipError(`unsafe path ${JSON.stringify(path)}${reading ? "" : " (not written)"}`);
-}
-function concat(parts) {
+
+// frontend/packages/creator-kit/src/pack.ts
+import { createHash as createHash2 } from "node:crypto";
+import { lstat, readdir as readdir2, readFile as readFile3 } from "node:fs/promises";
+import { join as join3 } from "node:path";
+
+// frontend/packages/creator-kit/src/tar.ts
+import { gzipSync } from "node:zlib";
+var BLOCK2 = 512;
+var NAME_MAX = 100;
+var PREFIX_MAX = 155;
+var encoder2 = new TextEncoder;
+function writeTar(files) {
+  const sorted = [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  const parts = [];
+  for (const file2 of sorted) {
+    parts.push(header(file2.path, file2.bytes.byteLength));
+    const padded = new Uint8Array(Math.ceil(file2.bytes.byteLength / BLOCK2) * BLOCK2);
+    padded.set(file2.bytes);
+    parts.push(padded);
+  }
+  parts.push(new Uint8Array(BLOCK2 * 2));
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
   let offset = 0;
   for (const part of parts) {
@@ -39628,207 +39879,78 @@ function concat(parts) {
   }
   return out;
 }
-
-// frontend/packages/creator-kit/src/merge.ts
-class MergeError extends Error {
-  name = "MergeError";
+function gzipTar(files) {
+  return new Uint8Array(gzipSync(writeTar(files)));
 }
-var STAGE_BASE = 1;
-var STAGE_OURS = 2;
-var STAGE_THEIRS = 3;
-function parseMergeTree(output) {
-  const tokens = output.split("\x00");
-  let index = 0;
-  const next = () => tokens[index++];
-  const tree = next() ?? "";
-  const stages = {};
-  for (let token = next();token !== undefined && token !== ""; token = next()) {
-    const tab = token.indexOf("\t");
-    const [, oid, stage] = token.slice(0, tab).split(" ");
-    const path = token.slice(tab + 1);
-    stages[path] = { ...stages[path], [Number(stage)]: oid };
-  }
-  const types = {};
-  for (let count = next();count !== undefined && /^\d+$/.test(count); count = next()) {
-    const paths = Array.from({ length: Number(count) }, () => next());
-    const kind = next();
-    next();
-    for (const path of paths)
-      types[path] = [...types[path] ?? [], kind];
-  }
-  return { tree, stages, types };
+function header(path, size) {
+  const [prefix, name] = splitPath(path);
+  const block = new Uint8Array(BLOCK2);
+  field(block, 0, name);
+  field(block, 100, "0000644\x00");
+  field(block, 108, "0000000\x00");
+  field(block, 116, "0000000\x00");
+  field(block, 124, `${size.toString(8).padStart(11, "0")}\x00`);
+  field(block, 136, "00000000000\x00");
+  field(block, 148, "        ");
+  block[156] = 48;
+  field(block, 257, "ustar\x00");
+  field(block, 263, "00");
+  field(block, 345, prefix);
+  let sum = 0;
+  for (const byte of block)
+    sum += byte;
+  field(block, 148, `${sum.toString(8).padStart(6, "0")}\x00 `);
+  return block;
 }
-var KIND_BY_TYPE = [
-  ["CONFLICT (binary)", "binary"],
-  ["CONFLICT (modify/delete)", "modify/delete"],
-  ["CONFLICT (rename", "rename"]
-];
-function kindOf(types, stages) {
-  const reported = KIND_BY_TYPE.find(([prefix]) => types.some((type) => type.startsWith(prefix)));
-  if (reported)
-    return reported[1];
-  return STAGE_BASE in stages ? "content" : "add/add";
-}
-function deletedBy(stages) {
-  if (!(STAGE_BASE in stages))
-    return null;
-  if (!(STAGE_OURS in stages))
-    return "ours";
-  return STAGE_THEIRS in stages ? null : "theirs";
-}
-function conflictsOf(merged) {
-  return Object.keys(merged.stages).sort().map((path) => {
-    const stages = merged.stages[path];
-    return { path, kind: kindOf(merged.types[path] ?? [], stages), deleted_by: deletedBy(stages) };
-  });
-}
-function mergeReport(report) {
-  return {
-    kind: report.kind,
-    base: report.base,
-    ours: report.ours,
-    theirs: report.theirs,
-    files: report.files,
-    conflicts: report.conflicts,
-    intent: report.intent
-  };
-}
-function premerge(inputs) {
-  const scratch = mkdtempSync(join(tmpdir(), "kit-premerge-"));
-  try {
-    const git = new Git(scratch);
-    const baseCommit = git.commit(treeOf(git, inputs.base, "base"));
-    const oursCommit = git.commit(treeOf(git, inputs.ours, "ours"));
-    const theirsCommit = git.commit(treeOf(git, withListingOf(inputs.theirs, inputs.ours), "theirs"));
-    const merged = git.mergeTree(baseCommit, oursCommit, theirsCommit);
-    const conflicts = conflictsOf(merged);
-    return {
-      mergedZip: git.archive(merged.tree),
-      inputsZip: conflicts.length > 0 ? inputsZip(git, merged) : null,
-      conflicts,
-      files: git.changes(baseCommit, theirsCommit)
-    };
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-}
-var LISTING_DIR = "listing";
-var DIFF_EXCLUDES = [`:(exclude)${LISTING_DIR}`, ":(exclude)bundles"];
-var inListing = (file2) => file2.path.startsWith(`${LISTING_DIR}/`);
-function withListingOf(theirs, ours) {
-  return [...readZip(theirs).filter((file2) => !inListing(file2)), ...readZip(ours).filter(inListing)];
-}
-function treeOf(git, archive, name) {
-  if (archive === null)
-    return git.emptyTree();
-  const workdir = join(git.root, name);
-  mkdirSync(workdir);
-  for (const file2 of Array.isArray(archive) ? archive : readZip(archive)) {
-    const target = join(workdir, ...file2.path.split("/"));
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, file2.bytes);
-  }
-  return git.writeTree(workdir);
-}
-function inputsZip(git, merged) {
-  const sides = { 1: "base", 2: "ours", 3: "theirs" };
-  const files = [];
-  for (const [path, stages] of Object.entries(merged.stages)) {
-    for (const [stage, oid] of Object.entries(stages)) {
-      files.push({ path: `${sides[Number(stage)]}/${path}`, bytes: git.blob(oid) });
+function splitPath(path) {
+  if (encoder2.encode(path).byteLength <= NAME_MAX)
+    return ["", path];
+  for (let at = path.indexOf("/");at > 0; at = path.indexOf("/", at + 1)) {
+    const prefix = path.slice(0, at);
+    const name = path.slice(at + 1);
+    if (encoder2.encode(prefix).byteLength <= PREFIX_MAX && encoder2.encode(name).byteLength <= NAME_MAX) {
+      return [prefix, name];
     }
   }
-  return writeZip(files);
+  throw new Error(`${path} does not fit a ustar header (100-byte name, 155-byte prefix)`);
 }
-var GIT_OPTIONS = ["-c", "core.autocrlf=false", "-c", "merge.conflictStyle=merge"];
-var GIT_TIMEOUT_MS = 60000;
-
-class Git {
-  root;
-  env;
-  constructor(root) {
-    this.root = root;
-    this.env = {
-      PATH: process.env.PATH,
-      SYSTEMROOT: process.env.SYSTEMROOT,
-      HOME: root,
-      USERPROFILE: root,
-      GIT_DIR: join(root, "repo.git"),
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_CONFIG_GLOBAL: devNull,
-      GIT_TERMINAL_PROMPT: "0",
-      GIT_AUTHOR_NAME: "platform",
-      GIT_AUTHOR_EMAIL: "merge@platform.invalid",
-      GIT_COMMITTER_NAME: "platform",
-      GIT_COMMITTER_EMAIL: "merge@platform.invalid"
-    };
-    this.run(["init", "--bare", "--quiet", join(root, "repo.git")]);
-  }
-  writeTree(workdir) {
-    const index = { GIT_INDEX_FILE: `${workdir}.index` };
-    this.run(["--work-tree", workdir, "add", "-A", "-f", "."], { extra: index });
-    return this.text(["write-tree"], { extra: index });
-  }
-  emptyTree() {
-    return this.text(["hash-object", "-t", "tree", "-w", "--stdin"], { stdin: new Uint8Array });
-  }
-  commit(tree) {
-    return this.text(["commit-tree", tree, "-m", "premerge"]);
-  }
-  mergeTree(base, ours, theirs) {
-    const output = this.run(["merge-tree", "--write-tree", "-z", `--merge-base=${base}`, ours, theirs], { ok: [0, 1] });
-    return parseMergeTree(new TextDecoder().decode(output));
-  }
-  changes(base, theirs) {
-    const output = new TextDecoder().decode(this.run([
-      "diff-tree",
-      "-r",
-      "-z",
-      "--no-renames",
-      "--name-status",
-      base,
-      theirs,
-      "--",
-      ".",
-      ...DIFF_EXCLUDES
-    ]));
-    const statuses = output.split("\x00").filter((_token, index) => index % 2 === 0);
-    return {
-      added: statuses.filter((status) => status === "A").length,
-      modified: statuses.filter((status) => status === "M" || status === "T").length,
-      deleted: statuses.filter((status) => status === "D").length
-    };
-  }
-  archive(tree) {
-    return writeZip(readZip(this.run(["archive", "--format=zip", tree])));
-  }
-  blob(oid) {
-    return this.run(["cat-file", "blob", oid]);
-  }
-  text(args, options = {}) {
-    return new TextDecoder().decode(this.run(args, options)).trim();
-  }
-  run(args, options = {}) {
-    const result = spawnSync("git", [...GIT_OPTIONS, ...args], {
-      input: options.stdin,
-      env: { ...this.env, ...options.extra },
-      timeout: GIT_TIMEOUT_MS,
-      maxBuffer: 512 * 1024 * 1024
-    });
-    if (result.error) {
-      throw new MergeError(`git ${args[0]} did not run (is git installed?): ${result.error.message}`);
-    }
-    if (!(options.ok ?? [0]).includes(result.status ?? -1)) {
-      throw new MergeError(`git ${args[0]} exited with ${result.status}: ${result.stderr.toString("utf8").slice(0, 500)}`);
-    }
-    return new Uint8Array(result.stdout);
-  }
+function field(block, offset, value) {
+  block.set(encoder2.encode(value), offset);
 }
 
 // frontend/packages/creator-kit/src/pack.ts
-import { createHash } from "node:crypto";
-import { lstat, readdir, readFile } from "node:fs/promises";
-import { join as join2 } from "node:path";
+class PackError extends Error {
+  name = "PackError";
+}
+async function collectFiles(root) {
+  const files = [];
+  const walk = async (relative2) => {
+    const entries = await readdir2(join3(root, relative2), { withFileTypes: true });
+    for (const entry of entries) {
+      const path = relative2 === "" ? entry.name : `${relative2}/${entry.name}`;
+      const info = await lstat(join3(root, path));
+      if (info.isSymbolicLink()) {
+        throw new PackError(`${path} is a symbolic link; Platform rejects links, copy the file instead`);
+      }
+      if (info.isDirectory())
+        await walk(path);
+      else if (info.isFile()) {
+        files.push({ path, bytes: new Uint8Array(await readFile3(join3(root, path))) });
+      }
+    }
+  };
+  await walk("");
+  return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+}
+function buildDistArchive(files) {
+  if (!files.some((file2) => file2.path === "manifest.json")) {
+    throw new PackError("source/dist has no manifest.json at its root; build first (instructions.md §2)");
+  }
+  return gzipTar(files.filter((file2) => file2.path !== ARTIFACT_INDEX_PATH));
+}
+function describeFile(bytes) {
+  return { size: bytes.byteLength, sha256: createHash2("sha256").update(bytes).digest("hex") };
+}
 
 // frontend/packages/creator-kit/src/package-refs.ts
 var KIT_NODE_MODULES = "node_modules";
@@ -39852,183 +39974,247 @@ function nonCanonicalFileRefs(text) {
   return [...text.matchAll(/"(file:[^"]*)"/g)].map((match) => match[1]).filter((spec) => !spec.startsWith(`file:${CANONICAL_KIT_ROOT}/sdk/`));
 }
 
-// frontend/packages/creator-kit/src/tar.ts
-import { gzipSync } from "node:zlib";
-var BLOCK2 = 512;
-var NAME_MAX = 100;
-var PREFIX_MAX = 155;
-var encoder3 = new TextEncoder;
-function writeTar(files) {
-  const sorted = [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-  const parts = [];
-  for (const file2 of sorted) {
-    parts.push(header2(file2.path, file2.bytes.byteLength));
-    const padded = new Uint8Array(Math.ceil(file2.bytes.byteLength / BLOCK2) * BLOCK2);
-    padded.set(file2.bytes);
-    parts.push(padded);
+// frontend/packages/creator-kit/src/pulled.ts
+class PulledError extends Error {
+  name = "PulledError";
+}
+var OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
+var SHA256 = /^[0-9a-f]{64}$/;
+var THREAD_REF = /^refs\/heads\/thread\/[0-9A-Za-z][0-9A-Za-z_-]*$/;
+var LOCAL_HOSTS2 = new Set(["localhost", "127.0.0.1", "[::1]"]);
+var isObject3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+function string4(record2, key, pattern) {
+  const value = record2[key];
+  if (typeof value !== "string" || value === "" || pattern && !pattern.test(value)) {
+    throw new PulledError(`get_git_bundles: "${key}" is missing or malformed`);
   }
-  parts.push(new Uint8Array(BLOCK2 * 2));
-  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
-  let offset = 0;
-  for (const part of parts) {
-    out.set(part, offset);
-    offset += part.byteLength;
+  return value;
+}
+function url2(value, what) {
+  if (typeof value !== "string")
+    throw new PulledError(`get_git_bundles: ${what} is not a URL`);
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new PulledError(`get_git_bundles: ${what} is not a URL`);
   }
-  return out;
-}
-function gzipTar(files) {
-  return new Uint8Array(gzipSync(writeTar(files)));
-}
-function header2(path, size) {
-  const [prefix, name] = splitPath(path);
-  const block = new Uint8Array(BLOCK2);
-  field(block, 0, name);
-  field(block, 100, "0000644\x00");
-  field(block, 108, "0000000\x00");
-  field(block, 116, "0000000\x00");
-  field(block, 124, `${size.toString(8).padStart(11, "0")}\x00`);
-  field(block, 136, "00000000000\x00");
-  field(block, 148, "        ");
-  block[156] = 48;
-  field(block, 257, "ustar\x00");
-  field(block, 263, "00");
-  field(block, 345, prefix);
-  let sum = 0;
-  for (const byte of block)
-    sum += byte;
-  field(block, 148, `${sum.toString(8).padStart(6, "0")}\x00 `);
-  return block;
-}
-function splitPath(path) {
-  if (encoder3.encode(path).byteLength <= NAME_MAX)
-    return ["", path];
-  for (let at = path.indexOf("/");at > 0; at = path.indexOf("/", at + 1)) {
-    const prefix = path.slice(0, at);
-    const name = path.slice(at + 1);
-    if (encoder3.encode(prefix).byteLength <= PREFIX_MAX && encoder3.encode(name).byteLength <= NAME_MAX) {
-      return [prefix, name];
-    }
+  const local = parsed.protocol === "http:" && LOCAL_HOSTS2.has(parsed.hostname);
+  if (parsed.protocol !== "https:" && !local) {
+    throw new PulledError(`get_git_bundles: ${what} must be https (or http on localhost)`);
   }
-  throw new Error(`${path} does not fit a ustar header (100-byte name, 155-byte prefix)`);
+  return value;
 }
-function field(block, offset, value) {
-  block.set(encoder3.encode(value), offset);
-}
-
-// frontend/packages/creator-kit/src/pack.ts
-class PackError extends Error {
-  name = "PackError";
-}
-function isSourcePath(path) {
-  const segments = path.split("/");
-  const top = segments[0];
-  if (top === "dist" || top === "bundles")
-    return false;
-  return !segments.some((segment) => segment === "node_modules" || segment.startsWith("."));
-}
-async function collectFiles(root, include = () => true) {
-  const files = [];
-  const walk = async (relative) => {
-    const entries = await readdir(join2(root, relative), { withFileTypes: true });
-    for (const entry of entries) {
-      const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
-      if (!include(entry.isDirectory() ? `${path}/` : path))
-        continue;
-      const info = await lstat(join2(root, path));
-      if (info.isSymbolicLink()) {
-        throw new PackError(`${path} is a symbolic link; Platform rejects links, copy the file instead`);
-      }
-      if (info.isDirectory())
-        await walk(path);
-      else if (info.isFile()) {
-        files.push({ path, bytes: new Uint8Array(await readFile(join2(root, path))) });
-      }
-    }
+function head(value) {
+  if (value === null || value === undefined)
+    return null;
+  if (!isObject3(value))
+    throw new PulledError('get_git_bundles: "head" is malformed');
+  const playtest = value.playtest;
+  return {
+    commit_oid: string4(value, "commit_oid", OID),
+    playtest: isObject3(playtest) ? {
+      url: url2(playtest.url, "head.playtest.url"),
+      screenshots: (Array.isArray(playtest.screenshots) ? playtest.screenshots : []).map((shot) => url2(shot, "head.playtest.screenshots"))
+    } : null
   };
-  await walk("");
-  return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 }
-var decoder4 = new TextDecoder;
-var encoder4 = new TextEncoder;
-function buildSourceZip(files, sdkDirs) {
-  const canonical = files.map((file2) => {
-    if (!(file2.path === "package.json" || file2.path.endsWith("/package.json")))
-      return file2;
-    const text = canonicalizeSdkRefs(decoder4.decode(file2.bytes), sdkDirs);
-    const leftover = nonCanonicalFileRefs(text);
-    if (leftover.length > 0) {
-      throw new PackError(`${file2.path} still refers to ${leftover.join(", ")}; only the SDK (file:<kit>/sdk/<pkg>) may be a file: dependency`);
-    }
-    return { path: file2.path, bytes: encoder4.encode(text) };
-  });
-  return writeZip(canonical);
-}
-function buildDistArchive(files) {
-  if (!files.some((file2) => file2.path === "manifest.json")) {
-    throw new PackError("source/dist has no manifest.json at its root; build first (instructions.md §2)");
+function bundle(value) {
+  if (!isObject3(value) || !Number.isInteger(value.seq)) {
+    throw new PulledError("get_git_bundles: a bundle is malformed");
   }
-  return gzipTar(files);
+  return {
+    seq: value.seq,
+    kind: string4(value, "kind"),
+    sha256: string4(value, "sha256", SHA256),
+    url: url2(value.url, `bundle ${value.seq}`)
+  };
 }
-function describeFile(bytes) {
-  return { size: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex") };
+function parsePulled(text) {
+  let raw;
+  try {
+    raw = JSON.parse(text);
+  } catch (error51) {
+    throw new PulledError(`--bundles must be the JSON get_git_bundles returned (${String(error51)})`);
+  }
+  if (!isObject3(raw))
+    throw new PulledError("--bundles must be a JSON object");
+  const author = raw.author;
+  if (!isObject3(author))
+    throw new PulledError('get_git_bundles: "author" is missing');
+  if (!Array.isArray(raw.bundles))
+    throw new PulledError('get_git_bundles: "bundles" is missing');
+  return {
+    app_id: string4(raw, "app_id"),
+    session_id: string4(raw, "session_id"),
+    thread_ref: string4(raw, "thread_ref", THREAD_REF),
+    author: { name: string4(author, "name"), email: string4(author, "email", /^[^\s<>]+@[^\s<>]+$/) },
+    head: head(raw.head),
+    bundles: raw.bundles.map(bundle),
+    lfs_url: url2(raw.lfs_url, "lfs_url")
+  };
 }
+function fetchOrder(bundles) {
+  return [...bundles].sort((a, b) => Number(b.kind === "full") - Number(a.kind === "full") || a.seq - b.seq);
+}
+function threadBranch(threadRef) {
+  return threadRef.slice("refs/heads/".length);
+}
+function trackingRef(threadRef) {
+  return `${REMOTE_REFS}/${threadRef.slice("refs/".length)}`;
+}
+var REMOTE_REFS = "refs/remotes/tokoyo";
 
-// frontend/packages/creator-kit/src/review.ts
-function diffFiles(before, after) {
-  const old = new Map(before.map((file2) => [file2.path, file2.bytes]));
-  const changes = { added: [], modified: [], deleted: [] };
-  const seen = new Set;
-  for (const file2 of after) {
-    seen.add(file2.path);
-    const previous = old.get(file2.path);
-    if (previous === undefined)
-      changes.added.push(file2.path);
-    else if (!sameBytes(previous, file2.bytes))
-      changes.modified.push(file2.path);
-  }
-  for (const path of old.keys())
-    if (!seen.has(path))
-      changes.deleted.push(path);
-  changes.added.sort();
-  changes.modified.sort();
-  changes.deleted.sort();
-  return changes;
+// frontend/packages/creator-kit/src/repo.ts
+import { existsSync as existsSync3 } from "node:fs";
+import { appendFile, mkdir as mkdir2, readFile as readFile4, rm as rm2, writeFile as writeFile3 } from "node:fs/promises";
+import { join as join4 } from "node:path";
+class RepoError extends Error {
+  name = "RepoError";
 }
-function sameBytes(a, b) {
-  if (a.byteLength !== b.byteLength)
-    return false;
-  for (let index = 0;index < a.byteLength; index += 1)
-    if (a[index] !== b[index])
-      return false;
-  return true;
-}
-var ASK_A_PERSON_TOOLS = [
-  "open_proposal",
-  "close_proposal",
-  "comment_proposal",
-  "merge_proposal"
-];
-function codexApprovalToml(pluginId, server) {
-  const table = `plugins."${pluginId}".mcp_servers.${server}`;
+var SDK_FILTER = "tokoyo-sdk";
+function kitCommand(kitRoot, ...args) {
   return [
-    `[${table}]`,
-    'default_tools_approval_mode = "writes"',
-    ...ASK_A_PERSON_TOOLS.flatMap((tool) => [
-      "",
-      `[${table}.tools.${tool}]`,
-      'approval_mode = "approve"'
-    ])
-  ].join(`
+    shellQuote(process.execPath),
+    shellQuote(join4(kitRoot, "scripts", "kit.mjs")),
+    ...args
+  ].join(" ");
+}
+var EXCLUDES = ["node_modules/", "/dist/", ".DS_Store"];
+async function set2(git, source, key, value) {
+  await gitOk(git, source, ["config", key, value]);
+}
+async function configureRepo(git, source, config2, author) {
+  if (author) {
+    await set2(git, source, "user.name", author.name);
+    await set2(git, source, "user.email", author.email);
+  }
+  const lfs = config2.lfs_url;
+  await set2(git, source, "lfs.url", lfs);
+  await set2(git, source, "remote.tokoyo.url", lfs);
+  await set2(git, source, `lfs.${lfs}.locksverify`, "false");
+  await set2(git, source, `lfs.${lfs}.access`, "basic");
+  const origin = new URL(lfs).origin;
+  const helper = `credential.${origin}.helper`;
+  const unset = await git(["config", "--unset-all", helper], { cwd: source });
+  if (unset.code !== 0 && unset.code !== 5) {
+    throw new GitError(`git config --unset-all ${helper} failed: ${unset.stderr.trim()}`);
+  }
+  await gitOk(git, source, ["config", "--add", helper, ""]);
+  await gitOk(git, source, [
+    "config",
+    "--add",
+    helper,
+    `!${kitCommand(config2.kit_root, "credential")}`
+  ]);
+  await set2(git, source, `credential.${origin}.useHttpPath`, "true");
+  await set2(git, source, `filter.${SDK_FILTER}.clean`, kitCommand(config2.kit_root, "sdk-refs", "--clean"));
+  await set2(git, source, `filter.${SDK_FILTER}.smudge`, kitCommand(config2.kit_root, "sdk-refs", "--smudge"));
+  await set2(git, source, `filter.${SDK_FILTER}.required`, "true");
+  const branch = threadBranch(config2.thread_ref);
+  await set2(git, source, `branch.${branch}.remote`, ".");
+  await set2(git, source, `branch.${branch}.merge`, trackingRef(config2.thread_ref));
+  await set2(git, source, `branch.${branch}.rebase`, "true");
+  const info = join4(source, ".git", "info");
+  await mkdir2(info, { recursive: true });
+  await writeFile3(join4(info, "attributes"), `package.json filter=${SDK_FILTER}
 `);
+  const excludePath = join4(info, "exclude");
+  const excluded = existsSync3(excludePath) ? (await readFile4(excludePath, "utf8")).split(`
+`) : [];
+  const missing = EXCLUDES.filter((line) => !excluded.includes(line));
+  if (missing.length > 0)
+    await appendFile(excludePath, `${missing.join(`
+`)}
+`);
+}
+async function requireGitLfs(git, cwd) {
+  if (!await gitTest(git, cwd, ["lfs", "version"])) {
+    throw new RepoError("git-lfs is not installed; install Git LFS (https://git-lfs.com) first");
+  }
+}
+function requireRepo(source) {
+  if (!existsSync3(join4(source, ".git"))) {
+    throw new RepoError(`${source} is not a git repository; run kit.mjs clone in a new directory`);
+  }
+}
+async function requireClean(git, source, what) {
+  if (existsSync3(join4(source, ".git", "rebase-merge")) || existsSync3(join4(source, ".git", "rebase-apply"))) {
+    throw new RepoError("a git rebase is in progress in source/; finish it (git rebase --continue) first");
+  }
+  if (await gitOk(git, source, ["status", "--porcelain"]) !== "") {
+    throw new RepoError(`source/ has changes that are not committed; git commit them before ${what}`);
+  }
+}
+async function fetchBundles(git, source, pulled, already, download2) {
+  const listed = new Set(pulled.bundles.map((bundle2) => bundle2.sha256));
+  const fetched = already.filter((sha) => listed.has(sha));
+  const dir = join4(source, ".git", "tokoyo-bundles");
+  await mkdir2(dir, { recursive: true });
+  for (const bundle2 of fetchOrder(pulled.bundles)) {
+    if (fetched.includes(bundle2.sha256))
+      continue;
+    const bytes = await download2(`bundle ${bundle2.seq}`, bundle2.url, bundle2.sha256);
+    const file2 = join4(dir, `${bundle2.sha256}.bundle`);
+    await writeFile3(file2, bytes);
+    try {
+      await gitOk(git, source, [
+        "fetch",
+        "-q",
+        "--no-tags",
+        "--no-write-fetch-head",
+        file2,
+        `+refs/*:${REMOTE_REFS}/*`
+      ]);
+    } finally {
+      await rm2(file2, { force: true });
+    }
+    fetched.push(bundle2.sha256);
+  }
+  if (pulled.head) {
+    const oid = pulled.head.commit_oid;
+    if (!await gitTest(git, source, ["cat-file", "-e", `${oid}^{commit}`])) {
+      throw new RepoError(`the bundles do not contain the thread's head ${oid}; ask get_git_bundles again`);
+    }
+    await gitOk(git, source, ["update-ref", trackingRef(pulled.thread_ref), oid]);
+  }
+  return fetched;
+}
+async function integrate(git, source, threadRef) {
+  const remote = trackingRef(threadRef);
+  const branch = threadBranch(threadRef);
+  const local = await git(["rev-parse", "--verify", "-q", threadRef], { cwd: source });
+  if (local.code !== 0) {
+    await gitOk(git, source, ["checkout", "-q", "--no-track", "-B", branch, remote]);
+    return { status: "fast_forward" };
+  }
+  const tip = local.stdout.trim();
+  const head2 = await gitOk(git, source, ["rev-parse", remote]);
+  if (tip === head2)
+    return { status: "up_to_date" };
+  if (await gitTest(git, source, ["merge-base", "--is-ancestor", tip, head2])) {
+    await gitOk(git, source, ["merge", "-q", "--ff-only", remote]);
+    return { status: "fast_forward" };
+  }
+  if (await gitTest(git, source, ["merge-base", "--is-ancestor", head2, tip]))
+    return { status: "ahead" };
+  const rebase = await git(["rebase", "-q", remote], { cwd: source, env: { GIT_EDITOR: "true" } });
+  if (rebase.code === 0)
+    return { status: "rebased" };
+  const conflicts = (await gitOk(git, source, ["diff", "--name-only", "--diff-filter=U"])).split(`
+`).filter(Boolean);
+  if (conflicts.length === 0)
+    throw new RepoError(`git rebase failed: ${rebase.stderr.trim()}`);
+  return { status: "conflict", conflicts };
 }
 
 // frontend/packages/creator-kit/src/sdk.ts
-import { spawnSync as spawnSync2 } from "node:child_process";
-import { createHash as createHash2 } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir as readdir2, readFile as readFile2, rm, writeFile } from "node:fs/promises";
-import { tmpdir as tmpdir2 } from "node:os";
-import { join as join3 } from "node:path";
+import { spawnSync } from "node:child_process";
+import { createHash as createHash3 } from "node:crypto";
+import { existsSync as existsSync4 } from "node:fs";
+import { mkdir as mkdir3, mkdtemp, readdir as readdir3, readFile as readFile5, rm as rm3, writeFile as writeFile4 } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join as join5 } from "node:path";
 var SDK_DIR = "sdk";
 var SDK_SHA_FILE = ".sdk-sha256";
 var ARCHIVE_ROOT_DEPTH = 1;
@@ -40040,42 +40226,42 @@ class SdkError extends Error {
   name = "SdkError";
 }
 async function setupSdk(options) {
-  const sdk = join3(options.kitRoot, SDK_DIR);
+  const sdk = join5(options.kitRoot, SDK_DIR);
   const expected = options.sha256.toLowerCase();
   if (await recordedSha(sdk) === expected)
     return "unchanged";
   const archive = await options.download(options.sdkUrl);
-  const actual = createHash2("sha256").update(archive).digest("hex");
+  const actual = createHash3("sha256").update(archive).digest("hex");
   if (actual !== expected) {
     throw new SdkError(`the SDK archive's sha256 is ${actual}, expected ${expected}; nothing was changed`);
   }
-  const scratch = await mkdtemp(join3(tmpdir2(), "kit-sdk-"));
+  const scratch = await mkdtemp(join5(tmpdir(), "kit-sdk-"));
   try {
-    const path = join3(scratch, "sdk.tgz");
-    await writeFile(path, archive);
-    await rm(sdk, { recursive: true, force: true });
-    await mkdir(sdk, { recursive: true });
+    const path = join5(scratch, "sdk.tgz");
+    await writeFile4(path, archive);
+    await rm3(sdk, { recursive: true, force: true });
+    await mkdir3(sdk, { recursive: true });
     untar(path, sdk);
     for (const required2 of ["app-sdk/spec.md", "package.json", KIT_LOCKFILE]) {
-      if (!existsSync(join3(sdk, required2)))
+      if (!existsSync4(join5(sdk, required2)))
         throw new SdkError(`the SDK archive has no ${required2}`);
     }
     await (options.install ?? npmCi)(sdk);
-    await writeFile(join3(sdk, SDK_SHA_FILE), `${expected}
+    await writeFile4(join5(sdk, SDK_SHA_FILE), `${expected}
 `);
   } finally {
-    await rm(scratch, { recursive: true, force: true });
+    await rm3(scratch, { recursive: true, force: true });
   }
   return "installed";
 }
 async function recordedSha(sdk) {
-  const path = join3(sdk, SDK_SHA_FILE);
-  if (!existsSync(path))
+  const path = join5(sdk, SDK_SHA_FILE);
+  if (!existsSync4(path))
     return null;
-  return (await readFile2(path, "utf8")).trim();
+  return (await readFile5(path, "utf8")).trim();
 }
 function untar(archive, into) {
-  const result = spawnSync2("tar", [
+  const result = spawnSync("tar", [
     "-xzf",
     archive,
     "-C",
@@ -40090,7 +40276,7 @@ function untar(archive, into) {
 }
 async function npmCi(sdk) {
   const windows = process.platform === "win32";
-  const result = spawnSync2(windows ? "npm.cmd" : "npm", [...NPM_CI_ARGS], {
+  const result = spawnSync(windows ? "npm.cmd" : "npm", [...NPM_CI_ARGS], {
     cwd: sdk,
     shell: windows,
     encoding: "utf8"
@@ -40102,31 +40288,39 @@ async function npmCi(sdk) {
   }
 }
 async function listSdkDirs(kitRoot) {
-  const sdk = join3(kitRoot, SDK_DIR);
-  if (!existsSync(join3(sdk, "app-sdk"))) {
+  const sdk = join5(kitRoot, SDK_DIR);
+  if (!existsSync4(join5(sdk, "app-sdk"))) {
     throw new SdkError("the SDK is not set up; call the MCP tool get_sdk and run `kit.mjs setup --sdk-url <url> --sha256 <sha256>`");
   }
-  const entries = await readdir2(sdk, { withFileTypes: true });
+  const entries = await readdir3(sdk, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && !NOT_PACKAGES.has(entry.name)).map((entry) => entry.name).sort();
 }
 
 // frontend/packages/creator-kit/src/workdir.ts
-import { existsSync as existsSync2 } from "node:fs";
-import { dirname as dirname2, join as join4 } from "node:path";
+import { existsSync as existsSync5 } from "node:fs";
+import { dirname as dirname2, join as join6 } from "node:path";
 var CONFIG_FILE = ".tokoyo.json";
 var WORKDIR_DIRS = {
   source: "source",
   input: "input",
   outputs: "outputs",
-  assetsCache: "assets-cache",
-  review: "review"
+  assetsCache: "assets-cache"
 };
 
 class ConfigError extends Error {
   name = "ConfigError";
 }
-var REQUIRED = ["app_id", "session_id", "kit_root", "kit_version"];
-var NULLABLE = ["base_revision_id", "mcp_url", "merge_theirs_revision_id"];
+var REQUIRED = [
+  "app_id",
+  "session_id",
+  "kit_root",
+  "kit_version",
+  "mcp_url",
+  "thread_ref",
+  "lfs_url"
+];
+var NULLABLE = ["base_commit_oid"];
+var LISTS = ["fetched_bundles"];
 function parseConfig(text) {
   let raw;
   try {
@@ -40141,7 +40335,7 @@ function parseConfig(text) {
   for (const key of REQUIRED) {
     const value = record2[key];
     if (typeof value !== "string" || value === "") {
-      throw new ConfigError(`${CONFIG_FILE}: "${key}" must be a non-empty string`);
+      throw new ConfigError(`${CONFIG_FILE}: "${key}" must be a non-empty string (a working directory from before git: clone it again)`);
     }
     config2[key] = value;
   }
@@ -40152,21 +40346,34 @@ function parseConfig(text) {
     }
     config2[key] = value;
   }
+  for (const key of LISTS) {
+    const value = record2[key] ?? [];
+    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+      throw new ConfigError(`${CONFIG_FILE}: "${key}" must be a list of strings`);
+    }
+    config2[key] = value;
+  }
   return config2;
 }
 function serializeConfig(config2) {
-  const ordered = Object.fromEntries([...REQUIRED, ...NULLABLE].map((key) => [key, config2[key]]));
+  const ordered = Object.fromEntries([...REQUIRED, ...NULLABLE, ...LISTS].map((key) => [key, config2[key]]));
   return `${JSON.stringify(ordered, null, 2)}
 `;
 }
-async function findWorkdir(start) {
+function locateWorkdir(start) {
   for (let current = start;; current = dirname2(current)) {
-    if (existsSync2(join4(current, CONFIG_FILE)))
+    if (existsSync5(join6(current, CONFIG_FILE)))
       return current;
-    if (dirname2(current) === current) {
-      throw new ConfigError(`no ${CONFIG_FILE} in ${start} or above; run this in the game's working directory (or run init)`);
-    }
+    if (dirname2(current) === current)
+      return null;
   }
+}
+async function findWorkdir(start) {
+  const found = locateWorkdir(start);
+  if (found === null) {
+    throw new ConfigError(`no ${CONFIG_FILE} in ${start} or above; run this in the game's working directory (or run clone)`);
+  }
+  return found;
 }
 function agentsMd(kitRoot) {
   return [
@@ -40190,6 +40397,7 @@ function agentsMd(kitRoot) {
     "- 作り方の工程は `$game-design`（企画と工程）・`$game-art-direction`（見た目の合意と素材の設計）・`$game-playtest`（自分で遊んで確かめる）に従う。",
     "- `$game-controls` と `$game-screen-layout` と `$game-ux`（遊べる体験）と `$game-listing`（掲載情報）は必ず使う。",
     "- `.tokoyo.json` は手で書き換えない（`node <kit>/scripts/kit.mjs` が書く）。",
+    "- `source/` は git のリポジトリ（branch は手元のスレッド）。変更は `git commit` してから送る。取り込みは `kit.mjs pull`（`git pull --rebase` と同じ）。",
     "",
     "## 動作の確認はアプリのプレビューで",
     "",
@@ -40215,45 +40423,76 @@ class CheckFailed extends Error {
 class CommandError extends Error {
   name = "CommandError";
 }
+function defaultConfigDir() {
+  const xdg = process.env.XDG_CONFIG_HOME;
+  return join7(xdg && xdg !== "" ? xdg : join7(homedir(), ".config"), "tokoyo");
+}
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin)
+    chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8");
+}
 function defaultContext(cwd, kitRoot) {
   return {
     cwd,
     kitRoot,
-    download: (url2) => download(url2),
-    fetch: (url2, init) => globalThis.fetch(url2, init),
+    download: (url3) => download(url3),
+    fetch: (url3, init) => globalThis.fetch(url3, init),
     stdout: (line) => process.stdout.write(`${line}
 `),
-    openUrl: openInBrowser
+    write: (text) => process.stdout.write(text),
+    openUrl: openInBrowser,
+    kitBuild,
+    git: runGit,
+    stdin: readStdin,
+    configDir: defaultConfigDir(),
+    now: Date.now,
+    authorize: loopbackAuthorize(openInBrowser)
   };
 }
 async function runCommand(args, context) {
   const { flags } = args;
-  switch (args.command) {
-    case "setup":
-      return setup(context, flags);
-    case "init":
-      return init(context, flags);
-    case "pull":
-      return pull(context, flags);
-    case "merge-inputs":
-      return mergeInputs(context, flags, args.switches.includes("rebase"));
-    case "pack":
-      return pack(context);
-    case "check":
-      return check2(context);
-    case "upload":
-      return uploadOutputs(context, flags);
-    case "link":
-      return link(context);
-    case "review":
-      return review(context, flags);
-    case "open":
-      return openEditor(context, flags);
-    case "codex-config":
-      return codexConfig(context);
+  try {
+    switch (args.command) {
+      case "setup":
+        return await setup(context, flags);
+      case "clone":
+        return await clone2(context, flags);
+      case "pull":
+        return await pull(context, flags);
+      case "build":
+        return await build(context);
+      case "pack":
+        return await pack(context);
+      case "check":
+        return await check2(context);
+      case "upload":
+        return await uploadOutputs(context, flags);
+      case "link":
+        return await link(context);
+      case "login":
+        return await loginCommand(context, flags);
+      case "credential":
+        return await credential(context, args.action);
+      case "sdk-refs":
+        return await sdkRefs(context, args.switches);
+      case "assets":
+        return await addAsset(context, flags);
+      case "open":
+        return await openEditor(context, flags);
+      case "codex-config":
+        return codexConfig(context);
+    }
+  } catch (error51) {
+    if (error51 instanceof RepoError || error51 instanceof PulledError) {
+      throw new CommandError(error51.message);
+    }
+    throw error51;
   }
 }
 var print = (context, value) => context.stdout(JSON.stringify(value, null, 2));
+var mcpUrlOf = (flag) => flag ?? process.env.GAME_SNS_MCP_URL ?? DEFAULT_MCP_URL;
 async function setup(context, flags) {
   const status = await setupSdk({
     kitRoot: context.kitRoot,
@@ -40261,68 +40500,47 @@ async function setup(context, flags) {
     sha256: flags.sha256,
     download: context.download
   });
-  print(context, { status, sdk: join5(context.kitRoot, SDK_DIR) });
+  print(context, { status, sdk: join7(context.kitRoot, SDK_DIR) });
 }
 async function kitVersion(kitRoot) {
-  const manifest = join5(kitRoot, ".claude-plugin", "plugin.json");
-  if (!existsSync3(manifest))
+  const manifest = join7(kitRoot, ".claude-plugin", "plugin.json");
+  if (!existsSync6(manifest))
     throw new CommandError(`${manifest} is missing; reinstall the Creator Kit`);
-  const version2 = JSON.parse(await readFile3(manifest, "utf8")).version;
+  const version2 = JSON.parse(await readFile6(manifest, "utf8")).version;
   if (typeof version2 !== "string")
     throw new CommandError(`${manifest} has no version`);
   return version2;
 }
-async function init(context, flags) {
-  const path = join5(context.cwd, CONFIG_FILE);
-  const existing = existsSync3(path) ? parseConfig(await readFile3(path, "utf8")) : null;
-  if (existing && existing.app_id !== flags["app-id"]) {
-    throw new CommandError(`${path} belongs to App ${existing.app_id}; use another directory for App ${flags["app-id"]}`);
-  }
-  const config2 = {
-    app_id: flags["app-id"],
-    session_id: flags["session-id"],
-    base_revision_id: existing?.base_revision_id ?? null,
-    kit_root: context.kitRoot,
-    kit_version: await kitVersion(context.kitRoot),
-    mcp_url: flags["mcp-url"] ?? existing?.mcp_url ?? null,
-    merge_theirs_revision_id: existing?.merge_theirs_revision_id ?? null
-  };
-  for (const dir of Object.values(WORKDIR_DIRS))
-    await mkdir2(join5(context.cwd, dir), { recursive: true });
-  await writeFile2(path, serializeConfig(config2));
-  await writeAgentFiles(context.cwd, context.kitRoot);
-  const source = join5(context.cwd, WORKDIR_DIRS.source);
-  const hasHead = flags["head-revision-id"] !== undefined;
-  if (!hasHead && !existsSync3(join5(source, "package.json")))
-    await copySampleApp(context.kitRoot, source);
-  print(context, {
-    workdir: context.cwd,
-    next: hasHead ? "download_source → kit.mjs pull" : "build in source/ (instructions.md §4.1), then kit.mjs pack"
-  });
+async function readConfig(workdir) {
+  return parseConfig(await readFile6(join7(workdir, CONFIG_FILE), "utf8"));
 }
+async function saveConfig(workdir, config2) {
+  await writeFile5(join7(workdir, CONFIG_FILE), serializeConfig(config2));
+}
+var sourceOf = (workdir) => join7(workdir, WORKDIR_DIRS.source);
 var AGENTS_TITLE = agentsMd("").split(`
 `)[0];
 async function writeAgentFiles(workdir, kitRoot) {
-  const agents = join5(workdir, "AGENTS.md");
-  if (!existsSync3(agents) || (await readFile3(agents, "utf8")).startsWith(AGENTS_TITLE)) {
-    await writeFile2(agents, agentsMd(kitRoot));
+  const agents = join7(workdir, "AGENTS.md");
+  if (!existsSync6(agents) || (await readFile6(agents, "utf8")).startsWith(AGENTS_TITLE)) {
+    await writeFile5(agents, agentsMd(kitRoot));
   }
-  const claude = join5(workdir, "CLAUDE.md");
-  if (!existsSync3(claude))
-    await writeFile2(claude, CLAUDE_MD);
+  const claude = join7(workdir, "CLAUDE.md");
+  if (!existsSync6(claude))
+    await writeFile5(claude, CLAUDE_MD);
 }
 async function copySampleApp(kitRoot, source) {
-  const sample = join5(kitRoot, SDK_DIR, "sample-app");
+  const sample = join7(kitRoot, SDK_DIR, "sample-app");
   const packages = await sdkPackages(kitRoot);
   await cp(sample, source, { recursive: true, force: true });
-  const manifest = await readFile3(join5(sample, "package.json"), "utf8");
-  await writeFile2(join5(source, "package.json"), newAppPackageJson(manifest, packages, kitRoot));
+  const manifest = await readFile6(join7(sample, "package.json"), "utf8");
+  await writeFile5(join7(source, "package.json"), newAppPackageJson(manifest, packages, kitRoot));
 }
 async function sdkPackages(kitRoot) {
   const packages = new Map;
   for (const dir of await listSdkDirs(kitRoot)) {
-    const manifest = join5(kitRoot, SDK_DIR, dir, "package.json");
-    const name = existsSync3(manifest) ? JSON.parse(await readFile3(manifest, "utf8")).name : dir;
+    const manifest = join7(kitRoot, SDK_DIR, dir, "package.json");
+    const name = existsSync6(manifest) ? JSON.parse(await readFile6(manifest, "utf8")).name : dir;
     packages.set(typeof name === "string" ? name : dir, dir);
   }
   return packages;
@@ -40345,251 +40563,336 @@ function newAppPackageJson(text, packages, kitRoot) {
   return `${JSON.stringify(manifest, null, 2)}
 `;
 }
-async function link(context) {
-  const workdir = await findWorkdir(context.cwd);
-  const config2 = await readConfig(workdir);
-  await localizeSource(workdir, context.kitRoot);
-  await saveConfig(workdir, {
-    ...config2,
-    kit_root: context.kitRoot,
-    kit_version: await kitVersion(context.kitRoot)
-  });
-  await writeAgentFiles(workdir, context.kitRoot);
-  print(context, { kit_root: context.kitRoot });
-}
-async function openEditor(context, flags) {
-  const config2 = await readConfig(await findWorkdir(context.cwd));
-  let url2;
-  try {
-    url2 = assertEditorUrl(flags.url, config2.app_id);
-  } catch (error51) {
-    if (error51 instanceof EditorUrlError)
-      throw new CommandError(error51.message);
-    throw error51;
-  }
-  const opened = await context.openUrl(url2);
-  print(context, opened ? { opened, url: url2 } : {
-    opened,
-    url: url2,
-    next: "show this url to the creator as a link (the browser could not be opened)"
-  });
-}
-async function readConfig(workdir) {
-  return parseConfig(await readFile3(join5(workdir, CONFIG_FILE), "utf8"));
-}
-async function saveConfig(workdir, config2) {
-  await writeFile2(join5(workdir, CONFIG_FILE), serializeConfig(config2));
-}
-async function fetchVerified(context, name, url2, sha256) {
-  const bytes = await context.download(url2);
-  const actual = createHash3("sha256").update(bytes).digest("hex");
+async function fetchVerified(context, name, url3, sha256) {
+  const bytes = await context.download(url3);
+  const actual = createHash4("sha256").update(bytes).digest("hex");
   if (sha256 !== undefined && actual !== sha256.toLowerCase()) {
     throw new CommandError(`${name}: sha256 is ${actual}, expected ${sha256}; nothing was changed`);
   }
   return bytes;
 }
-async function replaceSource(workdir, files) {
-  const source = join5(workdir, WORKDIR_DIRS.source);
-  await mkdir2(source, { recursive: true });
-  for (const entry of await readdir3(source)) {
-    if (entry === "node_modules" || entry.startsWith("."))
-      continue;
-    await rm2(join5(source, entry), { recursive: true, force: true });
+var PLAYTEST_REPORT = "playtest-report.json";
+var PLAYTEST_DIR = "playtest";
+async function replacePlaytest(context, workdir, playtest) {
+  const input = join7(workdir, WORKDIR_DIRS.input);
+  await rm4(join7(input, PLAYTEST_REPORT), { force: true });
+  await rm4(join7(input, PLAYTEST_DIR), { recursive: true, force: true });
+  if (playtest === null)
+    return;
+  const report = JSON.parse(new TextDecoder().decode(await context.download(playtest.url)));
+  await mkdir4(join7(input, PLAYTEST_DIR), { recursive: true });
+  const names = [];
+  for (const [index, shot] of playtest.screenshots.entries()) {
+    const name = `${PLAYTEST_DIR}/${index + 1}.png`;
+    await writeFile5(join7(input, name), await context.download(shot));
+    names.push(name);
   }
-  await writeFiles(source, files);
+  await writeFile5(join7(input, PLAYTEST_REPORT), `${JSON.stringify({ ...report, screenshots: names }, null, 2)}
+`);
 }
-async function writeFiles(dir, files) {
-  for (const file2 of files) {
-    const target = join5(dir, ...file2.path.split("/"));
-    await mkdir2(dirname3(target), { recursive: true });
-    await writeFile2(target, file2.bytes);
+var bundleDownloader = (context) => (name, url3, sha256) => fetchVerified(context, name, url3, sha256);
+var NEXT_EDIT = "change source/, git commit, then kit.mjs build → kit.mjs pack";
+async function clone2(context, flags) {
+  const pulled = parsePulled(flags.bundles);
+  const workdir = context.cwd;
+  const path = join7(workdir, CONFIG_FILE);
+  if (existsSync6(path)) {
+    const existing = await readConfig(workdir);
+    if (existing.app_id !== pulled.app_id) {
+      throw new CommandError(`${path} belongs to App ${existing.app_id}; use another directory for App ${pulled.app_id}`);
+    }
+    throw new CommandError(`${workdir} already has App ${pulled.app_id}; run kit.mjs pull instead`);
   }
-}
-async function localizeSource(workdir, kitRoot) {
-  const sdkDirs = await listSdkDirs(kitRoot);
-  const source = join5(workdir, WORKDIR_DIRS.source);
-  for (const file2 of await collectFiles(source, isSourcePath)) {
-    if (!(file2.path === "package.json" || file2.path.endsWith("/package.json")))
-      continue;
-    const text = new TextDecoder().decode(file2.bytes);
-    await writeFile2(join5(source, ...file2.path.split("/")), localizeSdkRefs(text, kitRoot, sdkDirs));
+  const source = sourceOf(workdir);
+  if (existsSync6(source) && (await readdir4(source)).length > 0) {
+    throw new CommandError(`${source} is not empty; clone into a new directory`);
   }
+  await requireGitLfs(context.git, workdir);
+  await listSdkDirs(context.kitRoot);
+  for (const dir of Object.values(WORKDIR_DIRS))
+    await mkdir4(join7(workdir, dir), { recursive: true });
+  const branch = threadBranch(pulled.thread_ref);
+  await gitOk(context.git, workdir, ["init", "-q", "-b", branch, source]);
+  await gitOk(context.git, source, ["lfs", "install", "--local"]);
+  const config2 = {
+    app_id: pulled.app_id,
+    session_id: pulled.session_id,
+    kit_root: context.kitRoot,
+    kit_version: await kitVersion(context.kitRoot),
+    mcp_url: mcpUrlOf(flags["mcp-url"]),
+    thread_ref: pulled.thread_ref,
+    lfs_url: pulled.lfs_url,
+    base_commit_oid: null,
+    fetched_bundles: []
+  };
+  await configureRepo(context.git, source, config2, pulled.author);
+  await saveConfig(workdir, config2);
+  const fetched = await fetchBundles(context.git, source, pulled, [], bundleDownloader(context));
+  if (pulled.head) {
+    await gitOk(context.git, source, [
+      "checkout",
+      "-q",
+      "--no-track",
+      "-B",
+      branch,
+      pulled.head.commit_oid
+    ]);
+  } else {
+    await copySampleApp(context.kitRoot, source);
+  }
+  const base = pulled.head?.commit_oid ?? null;
+  await saveConfig(workdir, { ...config2, base_commit_oid: base, fetched_bundles: fetched });
+  await writeAgentFiles(workdir, context.kitRoot);
+  await replacePlaytest(context, workdir, pulled.head?.playtest ?? null);
+  print(context, {
+    workdir,
+    branch,
+    base_commit_oid: base,
+    fetched: fetched.length,
+    next: pulled.head ? NEXT_EDIT : "write source/ (instructions.md §4.1), git commit, then kit.mjs build → kit.mjs pack"
+  });
 }
 async function pull(context, flags) {
   const workdir = await findWorkdir(context.cwd);
   const config2 = await readConfig(workdir);
-  const archive = await fetchVerified(context, "source.zip", flags.url, flags.sha256);
-  const files = readZip(archive);
+  const pulled = parsePulled(flags.bundles);
+  if (pulled.app_id !== config2.app_id || pulled.thread_ref !== config2.thread_ref) {
+    throw new CommandError(`these bundles are App ${pulled.app_id}'s (${pulled.thread_ref}), but ${workdir} is App ${config2.app_id} (${config2.thread_ref})`);
+  }
+  const source = sourceOf(workdir);
+  requireRepo(source);
+  await requireClean(context.git, source, "kit.mjs pull");
   await listSdkDirs(context.kitRoot);
-  await replaceSource(workdir, files);
-  await localizeSource(workdir, context.kitRoot);
-  await saveConfig(workdir, {
+  const next = {
     ...config2,
-    base_revision_id: flags["revision-id"],
-    merge_theirs_revision_id: null,
     kit_root: context.kitRoot,
-    kit_version: await kitVersion(context.kitRoot)
-  });
+    kit_version: await kitVersion(context.kitRoot),
+    lfs_url: pulled.lfs_url
+  };
+  await configureRepo(context.git, source, next, pulled.author);
+  const fetched = await fetchBundles(context.git, source, pulled, config2.fetched_bundles, bundleDownloader(context));
+  const added = fetched.filter((sha) => !config2.fetched_bundles.includes(sha)).length;
+  const base = pulled.head?.commit_oid ?? null;
+  await saveConfig(workdir, { ...next, base_commit_oid: base, fetched_bundles: fetched });
+  const result = base === null ? { status: "up_to_date" } : await integrate(context.git, source, config2.thread_ref);
   await writeAgentFiles(workdir, context.kitRoot);
-  await replacePlaytest(context, workdir, flags);
-  print(context, { base_revision_id: flags["revision-id"], files: files.length });
+  await replacePlaytest(context, workdir, pulled.head?.playtest ?? null);
+  print(context, {
+    ...result,
+    base_commit_oid: base,
+    fetched: added,
+    next: result.status === "conflict" ? "resolve the conflicts in source/, git add them, git rebase --continue, then kit.mjs build → kit.mjs pack" : NEXT_EDIT
+  });
 }
-var PLAYTEST_REPORT = "playtest-report.json";
-var PLAYTEST_DIR = "playtest";
-async function replacePlaytest(context, workdir, flags) {
-  const input = join5(workdir, WORKDIR_DIRS.input);
-  await rm2(join5(input, PLAYTEST_REPORT), { force: true });
-  await rm2(join5(input, PLAYTEST_DIR), { recursive: true, force: true });
-  const url2 = flags["playtest-url"];
-  if (url2 === undefined)
-    return;
-  const report = JSON.parse(new TextDecoder().decode(await context.download(url2)));
-  const shots = (flags["playtest-shots"] ?? "").split(",").filter(Boolean);
-  await mkdir2(join5(input, PLAYTEST_DIR), { recursive: true });
-  const names = [];
-  for (const [index, shot] of shots.entries()) {
-    const name = `${PLAYTEST_DIR}/${index + 1}.png`;
-    await writeFile2(join5(input, name), await context.download(shot));
-    names.push(name);
-  }
-  await writeFile2(join5(input, PLAYTEST_REPORT), `${JSON.stringify({ ...report, screenshots: names }, null, 2)}
-`);
-}
-var NONE = "none";
-var LOCAL = "local";
-async function mergeSide(context, workdir, name, url2, sha256) {
-  if (url2 === NONE)
-    return null;
-  if (url2 === LOCAL) {
-    const files = await collectFiles(join5(workdir, WORKDIR_DIRS.source), isSourcePath);
-    return buildSourceZip(files, await listSdkDirs(context.kitRoot));
-  }
-  return fetchVerified(context, name, url2, sha256);
-}
-async function mergeInputs(context, flags, rebase) {
+async function build(context) {
   const workdir = await findWorkdir(context.cwd);
-  const config2 = await readConfig(workdir);
-  const side = (name) => mergeSide(context, workdir, name, flags[`${name}-url`], flags[`${name}-sha256`]);
-  const [base, ours, theirs] = [await side("base"), await side("ours"), await side("theirs")];
-  if (ours === null || theirs === null) {
-    throw new CommandError("--ours-url and --theirs-url must be a URL (or local for ours)");
-  }
-  const result = premerge({ base, ours, theirs });
-  const theirsId = flags["theirs-revision-id"];
-  const oursId = flags["ours-revision-id"] ?? config2.base_revision_id ?? LOCAL;
-  const report = mergeReport({
-    kind: "sync_upstream",
-    base: flags["base-revision-id"] ?? (rebase ? config2.base_revision_id : null),
-    ours: oursId,
-    theirs: theirsId,
-    files: result.files,
-    conflicts: result.conflicts,
-    intent: { title: flags.title, body: flags.body ?? "" }
-  });
-  const input = join5(workdir, WORKDIR_DIRS.input);
-  await mkdir2(input, { recursive: true });
-  await writeFile2(join5(input, "source.zip"), result.mergedZip);
-  await writeFile2(join5(input, "merge-report.json"), `${JSON.stringify(report, null, 2)}
-`);
-  const inputsPath = join5(input, "merge-inputs.zip");
-  if (result.inputsZip)
-    await writeFile2(inputsPath, result.inputsZip);
-  else
-    await rm2(inputsPath, { force: true });
-  await replaceSource(workdir, readZip(result.mergedZip));
-  await localizeSource(workdir, context.kitRoot);
-  await saveConfig(workdir, {
-    ...config2,
-    base_revision_id: rebase ? theirsId : flags["ours-revision-id"] ?? config2.base_revision_id,
-    merge_theirs_revision_id: rebase ? config2.merge_theirs_revision_id : theirsId
-  });
-  print(context, { conflicts: result.conflicts, files: result.files, next: "$game-merge" });
+  const result = await context.kitBuild(sourceOf(workdir));
+  print(context, { dist: result.dist, artifact_hash: result.artifactHash, next: "kit.mjs pack" });
 }
 var OUTPUT_FILES = {
-  "source.zip": "application/zip",
+  "source.bundle": "application/octet-stream",
   "dist.tar.gz": "application/gzip",
   "build-report.json": "application/json"
 };
+async function assertCanonicalRefs(git, source, tip) {
+  const listed = await gitOk(git, source, ["ls-tree", "-r", "-z", "--name-only", tip]);
+  for (const path of listed.split("\x00")) {
+    if (!(path === "package.json" || path.endsWith("/package.json")))
+      continue;
+    const leftover = nonCanonicalFileRefs(await gitOk(git, source, ["show", `${tip}:${path}`]));
+    if (leftover.length > 0) {
+      throw new CommandError(`${path} refers to ${leftover.join(", ")}; only the SDK (file:<kit>/sdk/<pkg>) may be a file: dependency`);
+    }
+  }
+}
 async function pack(context) {
   const workdir = await findWorkdir(context.cwd);
   const config2 = await readConfig(workdir);
-  const source = join5(workdir, WORKDIR_DIRS.source);
-  const outputs = join5(workdir, WORKDIR_DIRS.outputs);
-  const reportPath = join5(outputs, "build-report.json");
-  if (!existsSync3(reportPath)) {
+  const source = sourceOf(workdir);
+  requireRepo(source);
+  await requireClean(context.git, source, "kit.mjs pack");
+  const symbolic = await context.git(["symbolic-ref", "-q", "HEAD"], { cwd: source });
+  if (symbolic.stdout.trim() !== config2.thread_ref) {
+    throw new CommandError(`source/ is not on ${threadBranch(config2.thread_ref)}; git switch ${threadBranch(config2.thread_ref)} first`);
+  }
+  const resolved = await context.git(["rev-parse", "--verify", "-q", config2.thread_ref], {
+    cwd: source
+  });
+  if (resolved.code !== 0)
+    throw new CommandError("source/ has no commit yet; git commit first");
+  const tip = resolved.stdout.trim();
+  const base = config2.base_commit_oid;
+  if (tip === base) {
+    throw new CommandError("no new commits since the head kit.mjs pull took (base_commit_oid); git commit first");
+  }
+  await assertCanonicalRefs(context.git, source, tip);
+  const outputs = join7(workdir, WORKDIR_DIRS.outputs);
+  const reportPath = join7(outputs, "build-report.json");
+  if (!existsSync6(reportPath)) {
     throw new CommandError("outputs/build-report.json is missing; write it first (instructions.md §2)");
   }
-  const dist = join5(source, "dist");
-  if (!existsSync3(dist))
-    throw new CommandError("source/dist is missing; build first");
-  const sourceZip = buildSourceZip(await collectFiles(source, isSourcePath), await listSdkDirs(context.kitRoot));
+  const dist = join7(source, "dist");
+  if (!existsSync6(dist))
+    throw new CommandError("source/dist is missing; kit.mjs build first");
+  await mkdir4(outputs, { recursive: true });
+  const bundlePath = join7(outputs, "source.bundle");
+  await gitOk(context.git, source, [
+    "bundle",
+    "create",
+    "-q",
+    bundlePath,
+    config2.thread_ref,
+    ...base === null ? [] : [`^${base}`]
+  ]);
   const distArchive = buildDistArchive(await collectFiles(dist));
-  await mkdir2(outputs, { recursive: true });
-  await writeFile2(join5(outputs, "source.zip"), sourceZip);
-  await writeFile2(join5(outputs, "dist.tar.gz"), distArchive);
-  const report = new Uint8Array(await readFile3(reportPath));
+  await writeFile5(join7(outputs, "dist.tar.gz"), distArchive);
   print(context, {
     files: {
-      "source.zip": describeFile(sourceZip),
+      "source.bundle": describeFile(new Uint8Array(await readFile6(bundlePath))),
       "dist.tar.gz": describeFile(distArchive),
-      "build-report.json": describeFile(report)
+      "build-report.json": describeFile(new Uint8Array(await readFile6(reportPath)))
     },
+    commit_oid: tip,
+    base_commit_oid: base,
     kit_version: await kitVersion(context.kitRoot),
-    kit_revision: KIT_REVISION,
-    base_revision_id: config2.base_revision_id,
-    merge_theirs_revision_id: config2.merge_theirs_revision_id
+    kit_revision: KIT_REVISION
   });
 }
 async function check2(context) {
   const workdir = await findWorkdir(context.cwd);
-  const path = join5(workdir, WORKDIR_DIRS.outputs, "dist.tar.gz");
-  if (!existsSync3(path))
+  const path = join7(workdir, WORKDIR_DIRS.outputs, "dist.tar.gz");
+  if (!existsSync6(path))
     throw new CheckFailed("outputs/dist.tar.gz is missing; run kit.mjs pack first");
-  const result = await checkDist(new Uint8Array(await readFile3(path)));
+  const result = await checkDist(new Uint8Array(await readFile6(path)));
   if (!result.passed)
     throw new CheckFailed(result.summary);
   context.stdout(result.summary);
 }
 async function uploadOutputs(context, flags) {
   const workdir = await findWorkdir(context.cwd);
+  const config2 = await readConfig(workdir);
   let urls;
   try {
     urls = JSON.parse(flags.urls);
   } catch (error51) {
     throw new CommandError(`--urls must be the JSON object begin_build returned (${String(error51)})`);
   }
-  for (const [name, contentType] of Object.entries(OUTPUT_FILES)) {
-    const url2 = urls[name];
-    if (typeof url2 !== "string")
+  for (const name of Object.keys(OUTPUT_FILES)) {
+    if (typeof urls[name] !== "string")
       throw new CommandError(`--urls has no URL for ${name}`);
-    const bytes = new Uint8Array(await readFile3(join5(workdir, WORKDIR_DIRS.outputs, name)));
-    await upload(name, url2, bytes, contentType, context.fetch);
+  }
+  const lfs = await context.git(["lfs", "push", "tokoyo", config2.thread_ref], {
+    cwd: sourceOf(workdir)
+  });
+  if (lfs.code !== 0) {
+    throw new CommandError(`uploading the LFS files failed: ${lfs.stderr.trim()} (not logged in? run kit.mjs login)`);
+  }
+  for (const [name, contentType] of Object.entries(OUTPUT_FILES)) {
+    const bytes = new Uint8Array(await readFile6(join7(workdir, WORKDIR_DIRS.outputs, name)));
+    await upload(name, urls[name], bytes, contentType, context.fetch);
   }
   print(context, { uploaded: Object.keys(OUTPUT_FILES) });
 }
-var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-async function review(context, flags) {
-  const id = flags["proposal-id"];
-  if (!UUID.test(id)) {
-    throw new CommandError(`--proposal-id must be a proposal id (UUID), got ${JSON.stringify(id)}`);
+async function link(context) {
+  const workdir = await findWorkdir(context.cwd);
+  const config2 = {
+    ...await readConfig(workdir),
+    kit_root: context.kitRoot,
+    kit_version: await kitVersion(context.kitRoot)
+  };
+  const source = sourceOf(workdir);
+  requireRepo(source);
+  await saveConfig(workdir, config2);
+  await configureRepo(context.git, source, config2, null);
+  const sdkDirs = await listSdkDirs(context.kitRoot);
+  const tracked = await gitOk(context.git, source, ["ls-files", "-z"]);
+  for (const path of tracked.split("\x00")) {
+    if (!(path === "package.json" || path.endsWith("/package.json")))
+      continue;
+    const file2 = join7(source, ...path.split("/"));
+    if (!existsSync6(file2))
+      continue;
+    await writeFile5(file2, localizeSdkRefs(await readFile6(file2, "utf8"), context.kitRoot, sdkDirs));
+    if (await gitTest(context.git, source, ["diff", "--quiet", "--", path])) {
+      await gitOk(context.git, source, ["add", "--", path]);
+    }
+  }
+  await writeAgentFiles(workdir, context.kitRoot);
+  print(context, { kit_root: context.kitRoot });
+}
+async function loginCommand(context, flags) {
+  const workdir = locateWorkdir(context.cwd);
+  const mcpUrl = flags["mcp-url"] ?? (workdir ? (await readConfig(workdir)).mcp_url : mcpUrlOf(undefined));
+  const stored = await login(mcpUrl, context);
+  print(context, {
+    logged_in: true,
+    mcp_url: mcpUrl,
+    expires_at: new Date(stored.expires_at).toISOString()
+  });
+}
+async function credential(context, action) {
+  const request = parseCredentialRequest(await context.stdin());
+  const workdir = locateWorkdir(context.cwd);
+  if (workdir === null)
+    return;
+  const config2 = await readConfig(workdir);
+  if (!isLfsRequest(request, config2.lfs_url))
+    return;
+  if (action === "erase") {
+    await forgetAccessToken(config2.mcp_url, context.configDir);
+    return;
+  }
+  if (action !== "get")
+    return;
+  const token = await accessToken(config2.mcp_url, context);
+  if (token === null) {
+    console.error(`kit.mjs credential: not logged in to ${config2.mcp_url}; run kit.mjs login`);
+    context.stdout("quit=1");
+    return;
+  }
+  context.stdout(`username=${CREDENTIAL_USERNAME}`);
+  context.stdout(`password=${token}`);
+}
+async function sdkRefs(context, switches) {
+  if (switches.length !== 1)
+    throw new CommandError("sdk-refs needs exactly one of --clean / --smudge");
+  const text = await context.stdin();
+  const sdkDirs = await listSdkDirs(context.kitRoot);
+  context.write(switches[0] === "clean" ? canonicalizeSdkRefs(text, sdkDirs) : localizeSdkRefs(text, context.kitRoot, sdkDirs));
+}
+async function addAsset(context, flags) {
+  const path = flags.path;
+  const segments = path.split("/");
+  if (path.startsWith("/") || path.includes("\\") || /^[A-Za-z]:/.test(path) || segments.some((segment) => segment === "" || segment === "." || segment === "..") || segments[0] === ".git") {
+    throw new CommandError(`--path must be a relative path under source/, got ${JSON.stringify(path)}`);
   }
   const workdir = await findWorkdir(context.cwd);
-  const base = flags["base-url"] === NONE ? [] : readZip(await fetchVerified(context, "base", flags["base-url"], flags["base-sha256"]));
-  const ours = readZip(await fetchVerified(context, "ours", flags["ours-url"], flags["ours-sha256"]));
-  const theirs = readZip(await fetchVerified(context, "theirs", flags["theirs-url"], flags["theirs-sha256"]));
-  const dir = join5(workdir, WORKDIR_DIRS.review, id);
-  await rm2(dir, { recursive: true, force: true });
-  await writeFiles(join5(dir, "base"), base);
-  await writeFiles(join5(dir, "ours"), ours);
-  await writeFiles(join5(dir, "theirs"), theirs);
-  const changes = {
-    proposal_id: id,
-    proposal: diffFiles(base, theirs),
-    upstream_since_base: diffFiles(base, ours)
-  };
-  await writeFile2(join5(dir, "changes.json"), `${JSON.stringify(changes, null, 2)}
-`);
-  print(context, { dir, ...changes });
+  const bytes = await fetchVerified(context, path, flags.url, flags.sha256);
+  const target = join7(sourceOf(workdir), ...segments);
+  await mkdir4(dirname3(target), { recursive: true });
+  await writeFile5(target, bytes);
+  print(context, {
+    path,
+    ...describeFile(bytes),
+    next: "git add it and commit (.gitattributes keeps the bytes in LFS)"
+  });
+}
+async function openEditor(context, flags) {
+  const config2 = await readConfig(await findWorkdir(context.cwd));
+  let url3;
+  try {
+    url3 = assertEditorUrl(flags.url, config2.app_id);
+  } catch (error51) {
+    if (error51 instanceof EditorUrlError)
+      throw new CommandError(error51.message);
+    throw error51;
+  }
+  const opened = await context.openUrl(url3);
+  print(context, opened ? { opened, url: url3 } : {
+    opened,
+    url: url3,
+    next: "show this url to the creator as a link (the browser could not be opened)"
+  });
 }
 var MCP_SERVER_NAME = "tokoyo";
 function codexConfig(context) {

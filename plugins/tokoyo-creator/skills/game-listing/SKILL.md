@@ -108,7 +108,7 @@ listing/
 `size="landscape"`（1536×1024）で作り、`download_url` から取って `source/listing/` に置く（どちらもそのまま条件に合う。
 透過しない画像は WebP で届くので、拡張子は `.webp` にする）。
 
-置き場所はソースのプロジェクトの直下の `listing/`（`package.json` と同じ階層）。`source.zip` に入れる（§2 の出力。`bundles/` と違い外さない）。
+置き場所はソースのプロジェクトの直下の `listing/`（`package.json` と同じ階層）。ソースの commit に含める（§2 の出力）。
 
 ## 5. `listingRequested`（利用者が頼んだ変更）
 

@@ -7,13 +7,12 @@
  * rules.ts は描画・DOM・音・SDK に触れない純粋な関数だけにする:
  *   init(seed) → state / step(state, input, dt) → state / isOver(state) → boolean / score(state) → number
  * 相対 import（./tuning など）は読める。パッケージの import は断る。
- * 依存はゲームのプロジェクトにある rollup と typescript だけ（追加しない）。
+ * rollup と TypeScript の変換は SDK の build-config から借りる（Kit が版を固定。ゲームの package.json には書かない）。
  */
 import { existsSync } from 'node:fs'
 import { dirname, resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { rollup } from 'rollup'
-import ts from 'typescript'
+import { rollup, transpileTypeScript } from '@workspace/app-sdk/build-config'
 
 const REQUIRED = ['init', 'step', 'isOver', 'score']
 const TS_EXTENSIONS = ['.ts', '.mts']
@@ -44,11 +43,7 @@ export async function loadRules(entry) {
         },
         transform(code, id) {
           if (!TS_EXTENSIONS.some((extension) => id.endsWith(extension))) return null
-          const output = ts.transpileModule(code, {
-            fileName: id,
-            compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-          })
-          return { code: output.outputText, map: null }
+          return { code: transpileTypeScript(code, id), map: null }
         },
       },
     ],

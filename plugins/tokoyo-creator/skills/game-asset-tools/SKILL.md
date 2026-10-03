@@ -50,7 +50,7 @@ description: ゲームの絵と音を用意する。CC0 のフリー素材の探
 | BGM | `generate_music(name, prompt, duration_sec=30)`。雰囲気・テンポ・楽器を書き「ループしやすい」と添える | MP3。ループ再生 |
 | 3D モデル | 透過した元画像の `asset_id`（§3 の結果、または `generate_image(transparent=true)` の結果）で `generate_model_3d(name, asset_id, polycount="low")`。**数分かかる** | GLB を `bundles/` に置く（`$game-3d-and-bundles`） |
 | 人型のモーション | フリー素材のアニメ付きキャラ（§3.5）に無い動きだけ `generate_motion(name, prompt, duration_sec)`。prompt は英語で 1 人の動きを具体的に（「A person swings a sword overhead, then steps back.」）。ループする動き（待機・歩き）は 1 周期の長さにする | **FBX のままゲームに入れない。** `$game-3d-studio` §4.3.1 でキャラの骨格にリターゲットし、キャラの GLB にクリップとして入れる |
-| 自分で作った音（Web Audio の書き出し）・GLB | `upload_asset(name, kind)` で登録（§4）。登録しないと次のターンで消える | — |
+| 自分で作った音（Web Audio の書き出し）・GLB | ほかのファイルと同じく commit する（Git LFS に入り、次のターンにも残る）。数 MiB を超えるものは `upload_asset(name, kind)` で台帳に載せて参照する（§4） | `assets/` か `bundles/` |
 
 - 生成したままの PNG（1 枚 1〜2 MB）を `assets/` に入れない。必ず縮小する。
 - 同じキャラクターの色違い・表情違いは、同じ指示文（絵柄・配色・構図）を使い回して描かせる。

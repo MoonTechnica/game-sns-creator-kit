@@ -40,8 +40,9 @@ function leaveStage2() {
 - `bundles/` の外（起動前に全部届く分）は **20 MiB まで**、10 MiB を超えると警告
   （スマートフォンの回線で起動を待たせる）。
 - GLB を自分で作る・手直しする・動かすなら `$game-3d-studio`（Blender）。
-- `source.zip` に `bundles/` の素材を入れない。次のターンは `list_assets` から取り直す
-  （自分で作った音・GLB は `upload_asset` で登録する。`$game-asset-tools` §4）。
+- `bundles/` の下のファイルもほかのソースと同じく commit する。画像・音・3D・動画・フォントは `.gitattributes` の規則で
+  自動的に Git LFS のポインタになる（次のターンにも残る）。台帳の素材は、置く代わりに下の `bundles.refs.json` で参照してもよい
+  （参照したパスのファイルは commit せず、`dist/` にも置かない）。
 
 ### 大きい素材は台帳から参照する（書庫に入れない）
 

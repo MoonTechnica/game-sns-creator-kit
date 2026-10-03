@@ -1,6 +1,6 @@
 ---
 name: tokoyo-remix
-description: 他の人が公開した TOKOYO.games のゲームをリミックスして（GitHub の fork）、自分の派生を手元で作り始める。Platform MCP（tokoyo）の resolve_app / remix / download_source と Creator Kit の CLI（init / pull）を使う。ゲームのページの URL（/g/…・/p/…）を渡されて「これを改造して」「リミックスして」「fork して」と言われたとき、他人のゲームを直して本流へ提案したいときに使う。remix, fork, derive.
+description: 他の人が公開した TOKOYO.games のゲームをリミックスして（GitHub の fork）、自分の派生を手元で作り始める。Platform MCP（tokoyo）の resolve_app / remix / get_git_bundles と Creator Kit の CLI（clone）を使う。ゲームのページの URL（/g/…・/p/…）を渡されて「これを改造して」「リミックスして」「fork して」と言われたとき、他人のゲームを直して本流へ提案したいときに使う。remix, fork, derive.
 ---
 
 # リミックスして作り始める
@@ -16,7 +16,7 @@ description: 他の人が公開した TOKOYO.games のゲームをリミック�
    - `remix.allowed` が false なら、`remix.reason`（`remix_not_allowed` / `not_published` / `no_published_version`）を利用者に伝えて止まる。
 2. `remix({ parent_version_id: <remix.version_id>, request_key: <新しい UUID> })`。チームに作るなら `owner_account_id`
    （`whoami` の `accounts` から利用者に選んでもらう）。やり直すときは同じ `request_key` を使う（fork が増えない）。
-3. 返った `app_id` で `$tokoyo-pull` の 2. から（`get_app` → `kit.mjs init` → `download_source` → `kit.mjs pull`）。
+3. 返った `app_id` で `$tokoyo-pull` の 2. から（`get_git_bundles` → 新しいディレクトリで `kit.mjs clone`）。
 4. 作って `$tokoyo-push` で送る。本流へ出すなら `$tokoyo-propose`。
    **1 つの提案には 1 つの目的だけ**を入れる。頼まれた変更に必要なファイルだけを変え、整形し直し・名前の付け替え・
    ついでの改善をしない（本流と衝突しやすくなり、作者が読みにくくなる）。掲載情報（`listing/`）は頼まれない限り変えない。
