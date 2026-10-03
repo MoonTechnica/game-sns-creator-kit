@@ -174,6 +174,9 @@ Arcade / Matter は端末ごとに結果が同じになる約束が無い。対�
 
 ## 8. 出力前のチェック
 
+照明・normal map・色調・filters を決める前に `$game-art-direction` の references/visual-direction.md §4 を読む。
+素材の粒度と焼き込んだ光を揃え、HUD の読みやすさを保つ。実画面の比較は同 §6。
+
 - [ ] `package.json` に `"phaser": "file:/workspace/sdk/node_modules/phaser"`、`manifest.json` に `"renderer": "webgl"`
 - [ ] `type: Phaser.WEBGL`、`input: { keyboard: false, gamepad: false }`、`update()` の最後に `input.endFrame()`
 - [ ] Loader に渡す URL が全部 `app.assets.url(…)`（相対パス・`setBaseURL`・`setPath`・`multiatlas`・外部 URL が無い）
@@ -181,3 +184,4 @@ Arcade / Matter は端末ごとに結果が同じになる約束が無い。対�
 - [ ] Phaser 3 で削除された API（`setPipeline` / `postFX` / `preFX` / `BitmapMask` / `Geom.Point` / `Math.PI2`）を使っていない
 - [ ] 対戦なら、勝敗に関わる物理は `server/main.ts` の Rapier で、`server/main.ts` は Phaser を import していない
 - [ ] `$game-controls` と `$game-screen-layout` のチェックも満たしている
+- [ ] `$game-art-direction` の基準に画風・粒度・明暗・光・UI / VFX が合い、見た画面と未確認の場面を `design/playtest.md` に区別して残した

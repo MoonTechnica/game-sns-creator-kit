@@ -1,0 +1,146 @@
+# 世界観をプレイ画面へ落とす
+
+この資料は素材を選ぶとき、照明を組むとき、仕上げで読む。API の正本は Kit の固定版型定義とエンジンの公式資料。
+コードを書く前に使う API の型を確認し、Phaser 3 の記憶や別版のサンプルで補わない。
+
+## 1. 判断の順序
+
+1. brief の「狙う感情」と利用者の参考から、場所・時代・見せる物・隠す物を決める。
+2. style-guide に画風・形・色・材質・光・カメラ・UI / VFX の基準を残す。
+3. 素材の適合性を判断し、代表的なプレイ場面に組み合わせる。
+4. 形と配置 → 素材と材質 → 光と影 → 露出と色調 → 飾りの順に整える。
+5. 得られた実画面を基準と比較して直す。次のターンも同じ基準を使う。
+
+作品ごとに決める。「高精細」「リアル」「暗い」を全作品の品質基準にしない。簡素な画風でも形・光・空気感を丁寧に揃える。
+利用者が意図した昼の恐怖、明るい不気味さ、対比のあるシーンは尊重する。
+
+## 2. `design/style-guide.md` に残すこと
+
+Skill 本文の 5 行を短い要約として残し、必要な詳細を下へ追記する。既存作品では足りない項目だけ補う。
+下の数値や題材は例であり、共通のプリセットではない。小さなパズルに不要な 3D 設計を足さない。
+
+| 項目 | 書くこと |
+|---|---|
+| 感情と世界 | 不安 / 安心 / 孤独など。場所・時代・生活感。何でそれを伝えるか |
+| 色と明暗 | 背景・主役・危険・操作対象の色の役割。暗部と明部の関係、最も注意を引く物 |
+| 形 | 比率・輪郭線・丸さ / 角・シルエット・描き込みの密度 |
+| 質感 | 写実 / 手描き / 単色。模様の尺度、粗さ、汚れ、反射の使い方 |
+| 光と影 | 光源の根拠・方向・色・範囲。補助光、影の硬さ、焼き込む影と動く光の関係 |
+| カメラと尺度 | 投影・視点・距離。主役の画面上の大きさ。2D のピクセル粒度、3D のモデル尺度 |
+| UI / VFX | 文字・背板・線・色・発光・パーティクルの密度。world の後処理に含めるか |
+| 禁止と例外 | 混ぜない画風、過度の発光、隠さない手掛かり。シーンごとの意図した違い |
+
+3D の光・環境照明・露出、2D の ambient color・フィルタ等は、使った実設定も同じガイドに記録する。
+数値だけでなく目的を添える。ポリゴン数と解像度は性能の予算でもあり、単独で画風を表さない。
+
+### ホラーの例: 夜の廃校
+
+- 感情: 先が見えない不安。冷たい暗部と少量の暖色光。
+- 視認性: 懐中電灯の届く範囲で床・扉・危険の輪郭が読める。遠景は一部隠す。
+- 質感: 古い木・くすんだ塗装・限定した湿り。机や壁を一律に鏡のようにしない。
+- 光: 廊下の照明と懐中電灯を根拠にする。均一で強い環境照明を足さない。
+- UI: 控えめな色と背板で読みやすくする。常時カラフルな発光で不安を消さない。
+
+全域を真っ黒にするのも、手掛かりを見せるため全域を明るくするのもこの狙いに合わない。
+局所的な明暗差・輪郭・動き・背景との分離を先に調整する。
+
+## 3. 素材の採否
+
+同じパックを有力候補にする。ただしパック名だけで採用を確定しない。主役の生成素材も同じ基準で見る。
+
+| 比較 | ずれの例 | 判断 |
+|---|---|---|
+| 視点・比率 | 真横の床に斜め上からのキャラ、キャラ同士の頭身差 | 同じ視点・比率へ加工できなければ置換 |
+| 粒度・輪郭 | 小さなドット絵のタイルに高精細なキャラ | 共通の粒度・線・陰影へ加工、または置換 |
+| 密度・形 | 単純な玩具風キャラに細部の多い写真風背景 | 描き込みと形の基準へ合わせる |
+| 質感・尺度 | 写実 PBR の岩だけ混在、床の模様だけ極端に大きい | 材質・UV・模様の尺度を調整、または置換 |
+| 光と影 | 左からの実光に、右からの光が焼き込まれた素材 | 焼き込みを直すか、照明に合う素材へ置換 |
+
+`asset-manifest.md` の理由に「採用 / 加工して採用 / 置換」と適合性を記録する。
+tint・パレット変換・全画面の color grading は形や描き方の違いを消せない。
+素材は中立的な照明で比較し、その後に作品の照明で見る。暗くして差を隠すだけにしない。
+
+## 4. 2D: Phaser 4 / Canvas 2D
+
+### 手描きの陰影か動的照明か
+
+- 平面的な画風や小さな pixel art は、描き込んだ影と色面で成立するかを先に判断する。
+- 動く光や素材の凹凸への反応が必要なら、Phaser 4 の Lights Manager と normal map を検討する。
+  `lights.enable()`、`setAmbientColor`、`addLight` と、対象の `setLighting(true)` を使う。Kit の型で確認する。
+- 法線マップの向き・凹凸の強さを揃え、元画像の陰影と実光を二重に強調しない。
+- 照明は WebGL の機能。Canvas 2D に同じ機能があると仮定しない。Canvas の既存作品は既存の描画で基準を維持する。
+- normal map による self-shadowing と、壁が別の物へ落とす遮蔽影は別。光を置くだけで壁が光を遮るとは考えない。
+
+### 色調・光の合成・ピクセル
+
+- Phaser 4 の `filters` で色調・Blend・Mask 等を扱う。必要なら Render Texture に描画をまとめる。
+  `setPipeline('Light2D')` / `postFX` / `preFX` は Phaser 3 の手順なので使わない。
+- フィルタの順序と適用範囲を決める。HUD は暗化・霧・発光に巻き込まれないレイヤー / カメラにする。
+- 同時光源と全画面処理を増やし過ぎない。全画面の重い処理より、必要な対象への処理を選ぶ。
+- pixel art は pixel scale・sampling・カメラ移動を揃える。`pixelArt: true` だけで異なる素材の粒度が揃うとは扱わない。
+  整数拡大が成立する表示条件と、移動時の輪郭のちらつきも実画面で確かめる。
+
+読み込み・画面・性能の規約は `$game-phaser` / `$game-screen-layout` に従う。
+
+## 5. 3D: Babylon.js
+
+### 直接光と環境照明
+
+- `clearColor` は背景色。黒くするだけでメッシュが暗くなるとは考えない。
+- 主光源・補助光・PBR の環境テクスチャ・発光材質・露出を別々に確認する。
+  空の見た目と環境テクスチャによる照明は別。StandardMaterial の ambient と PBR の環境照明を混同しない。
+- 室内のホラーに明るい屋外環境や強い均一の補助光を無条件で入れない。見えない物には局所的な補助や明暗差を作る。
+- 光の位置・範囲・減衰とモデルの尺度を合わせる。PBR と StandardMaterial の光の強さを同じ数値だけで比較しない。
+
+### 材質とテクスチャ
+
+- 単色・手描き・写実 PBR のどれを基準にするか決める。採用素材の roughness・metallic・normal・模様の尺度を揃える。
+- 木・石・布を一律に金属や鏡面にしない。湿りや強い反射は作品上の理由のある物だけにする。
+- glTF の base color / emissive RGB は sRGB、metallic-roughness は linear。roughness は G、metallic は B。
+  normal / occlusion 等のデータを色として補正しない。GLB の正しい loader 設定を不用意に上書きしない。
+- KTX2 変換でも color / data の性質を維持する。読み込みは `$game-3d-and-bundles` の SDK helper、同梱デコーダーを使う。
+
+### 影・露出・空気感
+
+- 重要な光に `ShadowGenerator` を設定し、caster と receiver を指定する。壁越しの光漏れと足元の接地を見る。
+  bias / normal bias・影の投影範囲は acne と浮きを見て調整する。全光源に高解像度の影を付けない。
+- 形・材質・光を整えてから、露出・tone mapping・color grading を調整する。最初は固定露出で基準を作る。
+- image processing の適用場所を揃え、gamma / tone mapping の重複による白浮きを避ける。
+- 霧は奥行きや遠景を隠すために使い、近くの必要な手掛かりを潰さない。通常の霧を volumetric lighting と呼ばない。
+- bloom は意図した明部に使う。強い DOF・色収差・grain を世界観の代用品にしない。
+- WebGPU と WebGL2 で重要な形・明暗・手掛かりを維持する。飾りを減らす場合も、重要な遮蔽を消して全域を明るくしない。
+  型だけで描画互換性を保証せず、得られた画像で確認する。未確認の描画経路は未確認と報告する。
+
+標準マテリアルを先に使う。CDN・Inspector・独自の外部 shader compiler は追加しない。
+解像度、KTX2、GPU メモリ、素材の解放は `$game-3d-and-bundles` に従う。
+
+## 6. 画面で確かめ、修正を残す
+
+`design/playtest.md` に以下から作品に必要な項目を加える。必要な明暗の対比は作品の基準に合わせ、全ゲーム共通の平均輝度で合格にしない。
+
+| 観察すること | 問題の例 | 先に調べる原因 |
+|---|---|---|
+| brief の雰囲気と一致 | 不安な夜なのに均一な昼の明るさ | 環境照明・補助光・露出 |
+| 素材が同じ世界に見える | 一体だけ写真風、違う頭身・粒度 | 形・視点・質感・加工の適合性 |
+| 主役と必要な手掛かりが読める | 暗部に消える、背景の細部に埋もれる | 局所的な明暗差・輪郭・配置・密度 |
+| 光と影が整合 | 壁越しの光、浮いた足元、二重の陰影 | caster / receiver・bias・焼き込み |
+| 材質が意図通り | 何でも濡れた金属に見える | metallic・roughness・環境反射 |
+| HUD と VFX が調和 | HUD まで暗い、霧や発光で危険が消える | レイヤー・後処理の範囲と強度 |
+| 小さな画面でも成立 | 主役が小さ過ぎる、線がちらつく | カメラ・尺度・表示と sampling |
+
+結果は「版 / 見た画像またはプレビューの場面 / 問題の物と場所 / 基準との差 / 原因 / 修正 / 再確認」を記録する。
+画像を実際に見た項目だけ ✓。前の版の画像は前の版の証拠として扱い、修正した版の確認済みにしない。
+画像が無い、見えない場面、描画経路を切り替えられない場合は未確認と書く。
+
+確認手段は `$game-playtest` の既存の画像と push 後のプレビュー。hosted で未提供の computer use を呼べると仮定しない。
+通常の検証は最小限、thorough は利用者が明確に頼んだ版だけ。画面取得のために自動で追加の有料生成や繰り返し push をしない。
+確認できないから制作を止めるのではなく、設定を基準へ合わせて進め、未確認部分を notes に残し次に届いた画像で確かめる。
+
+## 一次情報
+
+- [Valve: Illustrative Rendering in Team Fortress 2](https://cdn.fastly.steamstatic.com/apps/valve/2007/NPAR07_IllustrativeRenderingInTeamFortress2.pdf): 形・陰影・テクスチャと識別性。
+- [Playdead: INSIDE Rendering（GDC の公開概要）](https://www.gdcvault.com/play/1023002/Low-Complexity-High-Fidelity-INSIDE): 簡素な美術と照明・空気感。
+- [Phaser 4.2.1 LightsManager](https://raw.githubusercontent.com/phaserjs/phaser/v4.2.1/src/gameobjects/lights/LightsManager.js) / [Lighting](https://raw.githubusercontent.com/phaserjs/phaser/v4.2.1/src/gameobjects/components/Lighting.js): 固定版の照明。
+- [Phaser 4 FilterList](https://docs.phaser.io/api-documentation/4.0.0/class/gameobjects-components-filterlist): filters の範囲・順序・性能。
+- Babylon 公式原本: [Environment](https://raw.githubusercontent.com/BabylonJS/Documentation/master/content/features/featuresDeepDive/environment/environment_introduction.md)、[PBR](https://raw.githubusercontent.com/BabylonJS/Documentation/master/content/features/featuresDeepDive/materials/using/masterPBR.md)、[Shadows](https://raw.githubusercontent.com/BabylonJS/Documentation/master/content/features/featuresDeepDive/lights/shadows.md)、[DefaultRenderingPipeline](https://raw.githubusercontent.com/BabylonJS/Documentation/master/content/features/featuresDeepDive/postProcesses/defaultRenderingPipeline.md)、[ImageProcessing](https://github.com/BabylonJS/Documentation/blob/master/content/features/featuresDeepDive/materials/shaders/image_processing.md)。更新される文書なので Kit 固定版の型を優先して照合する。
+- [Khronos glTF 2.0 specification](https://raw.githubusercontent.com/KhronosGroup/glTF/main/specification/2.0/Specification.adoc): 材質と色空間。

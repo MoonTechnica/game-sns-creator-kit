@@ -70,6 +70,10 @@ function leaveStage2() {
 
 ## 2. 3D（Kit の Babylon.js）
 
+**材質・光・影・露出を決める前に `$game-art-direction` の references/visual-direction.md §5 を読む。**
+背景色だけで明暗を判断せず、直接光・環境照明・発光材質・露出を合わせる。素材の粗さと模様の尺度を揃え、
+重要な光の caster / receiver を指定する。WebGL2 でも作品の明暗と手掛かりを維持し、同 §6 で得られた実画面と基準を比較する。
+
 - `package.json` の `dependencies` に `"@babylonjs/core": "file:/workspace/sdk/node_modules/@babylonjs/core"` を足す。
   GLB を読むときは同様に `@babylonjs/loaders`、Babylon GUI を使うときは `@babylonjs/gui` を足す。いずれも **9.29.0** で、型は同梱。
 - ESM の必要なモジュールだけを import する（例: `@babylonjs/core/scene`、`@babylonjs/core/Materials/PBR/pbrMaterial`）。
