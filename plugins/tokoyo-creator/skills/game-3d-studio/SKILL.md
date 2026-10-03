@@ -1,9 +1,11 @@
 ---
 name: game-3d-studio
-description: Blender（bpy）で 3D の素材を作る「3D スタジオ」。手続き的なモデリング（小物・建物・地形・ローポリのキャラ）、GLB の手直し（大きさ・原点・向き・デシメート・結合）、リグとアニメーション（自動ウェイト + フリー素材のクリップ + 生成したモーション〔FBX〕のリターゲット）、3D から 2D（8 方向スプライト・アイコン）、ベイク（AO・ライトマップ）に使う。Babylon.js のコードで組めない形の GLB が要るとき、3D モデルを動かしたいとき、2D のゲームに 3D から描いたスプライトが欲しいときに使う。Blender, bpy, GLB, glTF, rig, sprite sheet, bake.
+description: Blender（bpy）で 3D の素材を作る「3D スタジオ」。手続き的なモデリング（小物・建物・地形・ローポリのキャラ）、GLB の手直し（大きさ・原点・向き・デシメート・結合）、人型・四足・鳥・魚・蛇・多脚のリグとアニメーション（体型に合う骨格・キーフレーム・自動ウェイト + フリー素材のクリップ + 生成したモーション〔FBX〕のリターゲット）、3D から 2D（8 方向スプライト・アイコン）、ベイク（AO・ライトマップ）に使う。Babylon.js のコードで組めない形の GLB が要るとき、3D モデルを動かしたいとき、2D のゲームに 3D から描いたスプライトが欲しいときに使う。Blender, bpy, GLB, glTF, rig, sprite sheet, bake.
 ---
 
 # 3D スタジオ（Blender を使用）
+
+モデルの調達は `$game-art-direction` §3 の「ライブラリ調査 → モデリング評価 → 生成AI」に従う。合う素材が無く、簡単に必要な品質まで作れる小物・建物などは、このSkillでモデリングする。複雑な重要キャラを粗い造形で済ませない。モデルの入手経路にかかわらず、不足するリグ・動きには対応する専用AIを優先できる。
 
 Babylon.js のコードで組める形（箱・球・床・パーティクル）は、そのままコードで描くほうが安く速い。
 **GLB が要る・リグやアニメーションを付ける・3D から 2D を描く・焼き込む**ときだけ使う。
@@ -58,6 +60,11 @@ Blender が無く、利用者が入れない場合は 3D スタジオを使わ�
 
 ### 4.3 リグとアニメーション
 
+**人以外も動かす。** 人型のMeshy自動リグ・`generate_motion`（SMPL-H）は四足・鳥・魚・蛇・多脚に使わない。モデルの体型と関節を確認し、[非人型のリグと動作](references/non-humanoid.md) の手順で専用AIを優先し、未対応の形・動きにはBlenderスクリプトを作る。既存のアニメ付き素材が体型・動作とも合う場合は再利用できる。
+
+非人型の完成GLBは `exports` に `require_rig: true` と `required_animations: ["Idle", "Walk"]` など、依頼された動作の名前を指定する。Platformは実際のGLBのスキン・ウェイト属性・骨へのアニメーションチャンネルを確認し、欠落時は `EXPORT_INVALID` として返す。動物に必要な動作を静止モデルで代用して終了しない。
+
+
 - 人型は、フリー素材の Quaternius UAL（`search_stock_assets` で `universal animation`）の骨格とクリップに合わせるのが早い。
   ただし **3D のフリー素材は 3D の枠が開くまで取り込めない**（`TOOL_NOT_ALLOWED`。`$game-asset-tools` §3.5）。そのときは次の手順で自分で骨を付ける。
 - 自分のメッシュに骨を付けるときは、骨を編集モードで作り、メッシュ → 骨の順に選んで
@@ -83,7 +90,7 @@ Blender が無く、利用者が入れない場合は 3D スタジオを使わ�
    clear_constraints=True, bake_types={"POSE"})` で付け先のアクションに焼き込み、名前を英語の動詞（`Run`）にして NLA トラックへ積む。
    モーションのアーマチュアとメッシュは消す。
 5. 動作ごとに 2〜4 を繰り返し、キャラの GLB を 1 つ書き出す（§3。`export_animation_mode="NLA_TRACKS"`）。
-   ゲームでは `AnimationMixer` にクリップ名で渡す（`$game-3d-and-bundles`）。
+   ゲームでは Babylon `AnimationGroup` にクリップ名で渡す（`$game-3d-and-bundles`）。
 6. **プレビューで必ず確かめる**: 足が床を突き抜けない・腕がねじれていない・向きが -Y のまま。
    ループさせる動き（待機・歩き）は最初と最後の姿勢が合っているか（合わなければ `generate_motion` の長さを変えて作り直す）。
 
@@ -99,3 +106,5 @@ AO やライトを Cycles でテクスチャに焼き込むと、Babylon.js 側�
 UV を展開（`smart_project`）→ 画像テクスチャのノードを作って選択 → `bpy.ops.object.bake(type="AO")` → PNG で保存。
 1024 px・32 サンプルで数秒〜十数秒。
 
+
+専用AI優先: 非人型は形の生成後に`rig_model_3d`→`animate_model_3d`を使い、未対応の体型・動作のみBlenderで補う。対応presetとキー未設定時の経路はgame-3d-studio/references/non-humanoid.mdを参照。
