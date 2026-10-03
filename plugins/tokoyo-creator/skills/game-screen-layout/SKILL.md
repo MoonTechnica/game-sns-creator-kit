@@ -39,8 +39,8 @@ resize()
 - **Phaser 4 は自前の `resize()` を書かず Scale Manager を使う**: 方式 A（§2）は `Phaser.Scale.FIT`、方式 B は
   `Phaser.Scale.EXPAND`（どちらも `autoCenter: Phaser.Scale.CENTER_BOTH`、基準の大きさは縦 720×1280 / 横 1280×720 のように大きめ）。
   `RESIZE` は画素が CSS の px と 1:1 になってスマホでぼけるので使わない。配置の決め直しは `this.scale.on('resize', …)`（`$game-phaser` §5）。
-- three.js は `renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5))`（3D は描く画素がそのまま重さになる。`$game-3d-and-bundles` §2）、`renderer.setSize(w, h)`、
-  `camera.aspect = w / h; camera.updateProjectionMatrix()`。
+- Babylon.js は `createEngine(canvas)` の DPR 上限を使う（3D は描く画素がそのまま重さになる。`$game-3d-and-bundles` §2）。
+  canvas の CSS を `width: 100%; height: 100%` にし、`resize` で `engine.resize()`（カメラの縦横比はエンジンが反映）。
 - `manifest.json` の `orientation` は**実際に合う向き**を書く（`portrait` / `landscape` / `any`）。
   ただし Platform は向きを固定しない。**違う向きでも遊べる**レイアウトにする（§2）。
 
@@ -138,7 +138,7 @@ resize()
 import { app } from '@workspace/app-sdk'
 
 async function shareResult(score: number) {
-  renderResult() // リザルトを描く（WebGL / WebGPU なら renderer.render(...)）
+  renderResult() // リザルトを描く（WebGL / WebGPU なら scene.render()）
   let captureId: string | undefined
   try {
     // 描いた直後、同じ処理の中で呼ぶ（await を挟まない）。後で呼ぶと WebGL / WebGPU の画面は真っ黒になる
@@ -170,7 +170,7 @@ async function shareResult(score: number) {
 ## 6. 止まる・再開する
 
 - `app.lifecycle.onPause` と、画面が隠れたとき（`document.visibilityState === 'hidden'`）に**ゲームを止める**:
-  ループ（`requestAnimationFrame` / `renderer.setAnimationLoop(null)`）とタイマーを止め、音を `suspend()` し、
+  ループ（`requestAnimationFrame` / `engine.stopRenderLoop()`）とタイマーを止め、音を `suspend()` し、
   ポーズ画面にする。入力キットの押しっぱなしは自動で離される。
 - 再開は**利用者の操作で**（ポーズ画面の「再開」）。戻った瞬間に敵が動き出して負けない。
 - `requestAnimationFrame` の時間差は上限を付ける（`dt = Math.min(dt, 1 / 30)`）。止まっていた時間ぶん一気に進めない。

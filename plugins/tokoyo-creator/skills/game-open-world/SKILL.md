@@ -5,7 +5,7 @@ description: 広い世界を歩き回るゲーム（オープンワールド・�
 
 # オープンワールド
 
-**3D の書き方（`WebGPURenderer`・KTX2・メモリ）は `$game-3d-and-bundles`、API の正本は `<kit>/sdk/app-sdk/spec.md`**
+**3D の書き方（`WebGPUEngine` / `Engine`・KTX2・メモリ）は `$game-3d-and-bundles`、API の正本は `<kit>/sdk/app-sdk/spec.md`**
 （§3.2 `app.store` の `blob`、§3.6 `app.bundles` の `hint`、§8.2 `app.documents`、§10 描画）。先に読む。
 下のコード（mulberry32・整数ハッシュ・チャンクの範囲）はそのまま使ってよい。
 
@@ -34,7 +34,7 @@ function streamChunks() {
 - **解放は `dispose()` まで**: そのチャンクで作った `geometry.dispose()` / `texture.dispose()`、共有していない
   `material.dispose()` を呼んで `scene.remove()` する。`dispose()` しないと GPU のメモリは返らない。
   同じ形・同じ色のもの（木・岩・石）は geometry と material を**全チャンクで 1 つ**にして使い回す（`InstancedMesh` も可）。
-- 開発中は `renderer.info.memory`（`geometries` / `textures`）を画面の隅に出し、歩き回っても**増え続けない**ことを確かめる。
+- 開発中は `scene.meshes.length` / `scene.textures.length`を画面の隅に出し、歩き回っても**増え続けない**ことを確かめる。
 - **遠くに穴を見せない**: 読み込み半径の少し手前から霧（`scene.fog`）で隠すか、低い解像度の地形の輪（LOD）を
   外側に置く。カメラの `far` を読み込み半径 + 1 チャンクに合わせる。
 
@@ -150,7 +150,7 @@ async function enterRegion(region: string, leaving: string) {
 - [ ] 生成に `Math.random` / `Math.sin` などを使っていない（mulberry32 + 整数ハッシュ + 四則）
 - [ ] 同じ seed で同じチャンクになる単体テストがある
 - [ ] 読み込み半径（PC 3 / スマホ 2）と解放半径（+ 1）、1 フレームに 1 チャンク、進行方向優先
-- [ ] 解放で `dispose()` し、`renderer.info` が歩き回っても増え続けない
+- [ ] 解放で `dispose()` し、`scene.meshes` / `scene.textures` が歩き回っても増え続けない
 - [ ] 遠くを霧か LOD で隠している
 - [ ] セーブは seed + 差分（`blob`）、オートセーブは 1 分に 1 回 + `onPause`
 - [ ] 地域の素材は `bundles` + `group`、地域を移るたびに `hint`

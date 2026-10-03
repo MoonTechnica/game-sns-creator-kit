@@ -1,96 +1,102 @@
 ---
 name: game-physics
-description: 物理で動くゲーム（落下・衝突・転がる・積む・跳ねる・車・ラグドール・ピンボール・物理パズル）を、同梱の Rapier（2D / 3D。決定版）で作る。画面と対戦サーバーで同じ結果になる書き方（seed 付きの乱数・固定の dt・剛体を足す順番）、three.js への反映（syncMeshes）、画面側の補間を扱う。遊びに物理の動きが要るときに使う。physics, rapier, rigid body, collision, deterministic.
+description: 物理で動くゲーム（落下・衝突・転がる・積む・跳ねる・車・ラグドール・物理パズル）を作る。3D は Babylon Physics V2 / Havok と headless Scene、2D は同梱の Rapier 決定版。描画とルールの分離、固定 dt、物理 Scene の解放、3D 対戦のサーバー権威と補間を扱う。physics, babylon, havok, rapier, rigid body, collision.
 ---
 
-# 物理（同梱の Rapier）
+# 物理（3D は Babylon / Havok、2D は Rapier）
 
-物理は Kit の lockfile にある **Rapier 0.21.0 の決定版**だけを使う（2D は `rapier2d-deterministic-compat`、3D は `rapier3d-deterministic-compat`）。
-**同じ入力なら、画面でも対戦サーバーでも同じ結果になる**（対戦サーバーも同じ版を持つ）。
-ほかの物理ライブラリ（cannon-es / ammo.js / Jolt など）は入らない。自前で衝突判定を書くより Rapier を使う。
-**例外: 2D を同梱の Phaser 4 で作る 1 人用のゲーム**は、Phaser の Arcade（四角と円の当たり・重力）や Matter でもよい
-（`$game-phaser` §6）。**オンライン対戦のルールの物理は必ずこの Rapier**（Phaser の物理は端末ごとに結果が同じになる約束が無い）。
+**API の正本は `<kit>/sdk/app-sdk/spec.md` §9** と、Kit の同梱型。3D と 2D を混ぜない。
+3D は Babylon Physics V2 9.29.0 / Havok 1.3.14、2D は Rapier 決定版 0.21.0。
+Phaser の Arcade / Matter は 1 人用の 2D ゲームだけで使える（`$game-phaser` §6）。
 
-**API の正本は `<kit>/sdk/app-sdk/spec.md` §9** と、Rapier の型（`<kit>/sdk/node_modules/@dimforge/rapier3d-deterministic-compat/dist/rapier.d.ts`）。先に読む。
+## 1. 3D の準備と作り方
 
-## 1. 入れ方
-
-`package.json`（`dependencies`）に使う方だけを書く:
-
-```json
-{ "dependencies": { "@dimforge/rapier3d-compat": "file:/workspace/sdk/node_modules/@dimforge/rapier3d-deterministic-compat" } }
-```
-
-2D なら `"@dimforge/rapier2d-compat": "file:/workspace/sdk/node_modules/@dimforge/rapier2d-deterministic-compat"`。中身は決定版で、build-config がそれを確かめて
-`app.bundle.js` に取り込む（3D で約 4.2 MiB、2D で約 3.3 MiB。起動前に届く 20 MiB に数える）。
+- `@babylonjs/core` は Kit の `file:/workspace/sdk/node_modules/@babylonjs/core` を参照する。
+- 対応する helper をバンドルすると Kit が **`physics/HavokPhysics.wasm`** を自動配置する（spec §9）。
+  手で WASM をコピーしない。
+  ブラウザは `await initPhysics()`（`@workspace/app-sdk/3d`）を呼ぶ。対戦は `app.space.join()` の前。
+  Space Server の loader は初期化済み。外部 CDN・ゲームからの直接 fetch は使わない。
+- ルールは `@workspace/app-server-sdk/physics` の再 export と helper で書く。
+  `createPhysicsScene` は NullEngine + Havok の独立した Scene。描画 Scene とは別にする。
+- 物理ノードは `TransformNode`。初期位置・四元数を決めてから `PhysicsBody` を作り、明示的な
+  `PhysicsShapeSphere` / `Box` / `Capsule` などを付ける。headless で Mesh 境界に依存する `PhysicsAggregate` は使わない。
 
 ```ts
-import RAPIER from '@dimforge/rapier3d-compat'
-import { syncMeshes } from '@workspace/app-sdk/physics'
+import { initPhysics } from '@workspace/app-sdk/3d'
+import {
+  createPhysicsScene, stepPhysics, disposePhysicsScene,
+  TransformNode, Vector3, Quaternion,
+  PhysicsBody, PhysicsMotionType, PhysicsShapeSphere,
+} from '@workspace/app-server-sdk/physics'
 
-async function start() {
-  await RAPIER.init()   // 必須。呼ばずに new RAPIER.World すると失敗する
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-  // …
+async function startPhysics() {
+  await initPhysics() // ブラウザだけ。Space Server の loader は初期化済み
+  const physicsScene = createPhysicsScene(new Vector3(0, -9.81, 0), 1 / 60)
+  const node = new TransformNode('ball-body', physicsScene)
+  node.position.set(0, 5, 0) // body を作る前に初期配置を決める
+  node.rotationQuaternion = Quaternion.Identity()
+  const body = new PhysicsBody(node, PhysicsMotionType.DYNAMIC, false, physicsScene)
+  body.shape = new PhysicsShapeSphere(Vector3.Zero(), 0.5, physicsScene)
+  body.setMassProperties({ mass: 1 })
+
+  // 固定 dt の tick（描画フレームとは分ける）
+  function tick() {
+    stepPhysics(physicsScene, 1 / 60)
+    ballMesh.position.copyFrom(node.position)
+    ballMesh.rotationQuaternion ??= Quaternion.Identity()
+    ballMesh.rotationQuaternion.copyFrom(node.rotationQuaternion!)
+  }
+  // tick をルールから呼ぶ。終了時は disposePhysicsScene(physicsScene)。
 }
 
-start().catch((error: unknown) => console.error(error))
+startPhysics().catch((error: unknown) => console.error(error))
 ```
 
-- 配信用バンドルは iife なので、`await RAPIER.init()` を関数の外に書くとビルドが落ちる（上の形にする）。
-- **対戦の画面**（予測・練習モード）でも、`app.space.join` の前に画面側で `RAPIER.init()` する。`init()` が済んでいるのは対戦サーバーだけ
-  （`$game-multiplayer` §2.4）。
+## 2. 3D のルールと対戦
 
-- **three.js の `three/addons/physics/RapierPhysics.js` は使わない**（Rapier を CDN から読み込もうとして検証で落ちる）。
-  three.js への反映は `syncMeshes(world, map)`（剛体の handle → Mesh）、当たりの形の確認は `debugLines`。
-- 2D の遊び（横スクロール・ピンボール・積み上げ）は 2D、奥行きのある遊びは 3D。2D の遊びに 3D を使わない（重い）。
+1. `dt` は固定（`1 / 60`、対戦は `1 / tickRate`）。描画の可変時間を物理の step に使わない。
+   描画フレームが遅い分は回数で追いかけ、1 フレーム最大 3 tick まで。
+2. 物理は `stepPhysics(scene, dt)` で 1 tick だけ進める。描画の `scene.render()` から物理を step しない。
+3. 物理の世界を作る関数はルールから export し、1 人用・練習モード・対戦サーバーが共有する。
+   卓ごとに Scene を持ち、同じ Sandbox の別の卓と共有しない（`ctx.state` をキーに `WeakMap`）。
+4. **対戦の 3D 物理はサーバーを正とする**。状態は数値の位置・四元数・速度のみ。
+   画面は自分を含めて `predict.attachAll` / `predict.value` で補間して描く。Havok の step を
+   `predict.reconciler` に渡さない。端末間の完全一致・rollback を前提にしない。
+5. 1 人用は headless の TransformNode を visible Mesh に写す。位置は `copyFrom`、向きは `rotationQuaternion.copyFrom`。
+   毎回の Mesh / shape 生成を避ける。GPU の粒子や cloth は見た目の飾りだけにする。
+6. 終了時は `disposePhysicsScene(scene)`。リトライ・ステージ切り替え・卓終了で Scene と WASM の剛体を残さない。
 
-## 2. 同じ結果になる書き方（必ず守る）
+## 3. 2D（Rapier 決定版）
 
-画面の予測・練習モードと対戦サーバーで**結果が割れると、相手と違う世界を見る**。次の 5 つを守る。
+```json
+{ "dependencies": { "@dimforge/rapier2d-compat": "file:/workspace/sdk/node_modules/@dimforge/rapier2d-deterministic-compat" } }
+```
 
-1. **世界の初期値を `Math.random()` で作らない。** seed 付きの乱数（mulberry32）を使い、seed は状態（`ctx.state`）に持つ。
-   `Math.sin` / `Math.cos` / `Math.pow` などは JS エンジンで結果が違うことがある（仕様で許されている）ので、
-   **初期の位置・速度は四則と整数のハッシュで作る**。角度から向きを作るなら、サーバーで 1 回だけ計算して結果の数値を状態で配る。
+```ts
+import RAPIER from '@dimforge/rapier2d-compat'
 
-   ```ts
-   export function mulberry32(seed: number) {
-     return () => {
-       seed = (seed + 0x6d2b79f5) | 0
-       let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-       return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-     }
-   }
-   ```
+async function start2d() {
+  await RAPIER.init()
+  const world = new RAPIER.World({ x: 0, y: -9.81 })
+  world.timestep = 1 / 60
+  // ルールの固定 tick で world.step()。終了時に world.free()。
+}
+```
 
-2. **`dt` は固定。** `world.timestep = 1 / tickRate`（対戦）/ `1 / 60`（1 人用）。**可変のフレーム時間（`requestAnimationFrame` の差分）を
-   `step` に入れない。** 画面のフレームと物理の step がずれる分は、step を回数で追いかけ（1 フレームに最大 3 回まで）、描画は補間する（§3）。
-3. **剛体を足す・消す順番を入力から決める。** 参加者の `slot` の昇順、ID の昇順のように決める。`Map` / `Set` の走査順や
-   届いた順（通信の順）に任せない。handle は足した順で決まるので、順番がずれると以後の結果が全部ずれる。
-4. **物理の計算はルールの関数に切り出して export し、画面の予測・練習からも同じものを呼ぶ**（`$game-multiplayer` §2.2 と同じ）。
-5. **物理の世界を作るコードを画面とサーバーで二重に書かない。** `server/main.ts` の関数を画面が import する。
+画面と Space Server の 2D の結果をそろえるため、次を守る:
 
-## 3. 画面に描く（補間）
+- 初期配置に `Math.random()` を使わず、seed 付き乱数（mulberry32）を使う。seed は状態に保存する。
+  初期配置の演算は四則と整数のハッシュ。`Math.sin` / `cos` で作る数値はサーバーで計算して配る。
+- `world.timestep` を固定し、可変フレーム時間を `step` に渡さない。
+- 剛体の生成・破棄は slot・ID の昇順のように順番を決め、通信到着順や Map の走査順に頼らない。
+- 物理のルールを export して画面・練習モード・サーバーで共有する。ブラウザは join の前に `RAPIER.init()`。
+- 2D の遊びに 3D 物理を使わない（負荷と奥行きの処理が増える）。
 
-- 1 人用: 固定 dt で step し、`syncMeshes(world, meshes)` で three.js に写してから描く。
-  スマホで重いときは剛体の数を減らす（目安: 3D で動く剛体 200 まで、2D で 500 まで）。
-- 対戦: 物理の結果（位置・向き）は**サーバーの状態**で届く。画面はそれを補間して描く（`$game-multiplayer` §2.2 の予測・補間）。
-  自分の操作で動くものだけ予測してよい。相手や落ちてくる物は予測しない。
-- 描画のフレームが step より速いときは、前後 2 つの step の位置を線形に補間して描く（カクつかない）。
+## 4. 出力前のチェック
 
-## 4. GPU の物理は飾りだけ
-
-WebGPU（TSL の compute）で動かす粒子・布・水しぶきは**結果が端末ごとに違う**（対戦サーバーでは回せない）。
-**勝敗・当たり・得点に関わるものは Rapier で計算し、GPU の物理は見た目の飾りにだけ使う。**
-WebGPU が使えない端末（WebGL2 で描いている）では飾りを減らすか消しても遊べるようにする。
-
-## 5. 出力前のチェック
-
-- [ ] `package.json` の Rapier は `file:/workspace/sdk/node_modules/@dimforge/rapier3d-deterministic-compat`（または 2d）で、import は `@dimforge/rapier3d-compat`（`rapier2d-compat`）
-- [ ] `await RAPIER.init()` を最初に 1 回
-- [ ] `world.timestep` が固定値（`1 / tickRate` か `1 / 60`）。step に可変の時間を入れていない
-- [ ] 初期配置に `Math.random()` / `Math.sin` / `Math.cos` を使っていない（seed 付きの乱数と四則）
-- [ ] 剛体を足す順番が入力（slot・ID の昇順）で決まっている
-- [ ] 消した剛体の Mesh を `syncMeshes` の map から外している（残っていると例外）
-- [ ] `RapierPhysics.js` を import していない
+- [ ] 3D は Havok、2D は Rapier 2D または 1 人用 Phaser 物理
+- [ ] 3D の WASM を `physics/HavokPhysics.wasm` に同梱し、ブラウザは `initPhysics()` を await
+- [ ] 3D の物理 Scene と描画 Scene が別で、`stepPhysics` と描画が二重 step していない
+- [ ] 対戦の Havok を reconciler で予測せず、サーバーの状態を補間
+- [ ] 固定 dt、卓ごとの世界、終了時の Scene / World 解放
+- [ ] 2D の Rapier は決定版で、初期乱数と剛体生成順を共有

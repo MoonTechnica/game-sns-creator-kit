@@ -40,7 +40,7 @@ Things to know up front:
 - `git` 2.38 or later and [Git LFS](https://git-lfs.com) (`source/` is a git repository; images, sounds and 3D models are stored with LFS)
 - `tar` (built in on macOS and Linux; Windows 10 and later ships `tar.exe`)
 - A registered TOKOYO.games account (an anonymous guest account is not enough). You sign in through the browser the first time.
-- Network access: the Kit runs `npm ci` to install SDK dependencies such as three.js.
+- Network access: the Kit runs `npm ci` to install SDK dependencies such as Babylon.js.
 
 ## Quick start (Claude Code)
 
@@ -256,5 +256,5 @@ You can copy Kit content, such as the sample code in the Skills, into your own g
 - The npm packages bundled in `plugins/tokoyo-creator/scripts/kit.mjs` follow their own licenses
   (see [`plugins/tokoyo-creator/THIRD_PARTY_NOTICES.md`](plugins/tokoyo-creator/THIRD_PARTY_NOTICES.md)).
 - The SDK unpacked into `sdk/` is fetched from the Platform and is not covered by this repository's license
-  (the bundled three.js is MIT).
+  (the bundled Babylon.js is Apache-2.0).
 - Use of the "TOKOYO.games" name and logo is not licensed.

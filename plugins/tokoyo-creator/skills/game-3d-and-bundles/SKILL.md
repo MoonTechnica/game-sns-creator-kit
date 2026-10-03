@@ -1,6 +1,6 @@
 ---
 name: game-3d-and-bundles
-description: 3D のゲーム（同梱の three.js の WebGPURenderer。WebGPU が無い端末は自動で WebGL2）と、素材が多い大きいゲーム（bundles/ への分割ダウンロード）を作る。GLB と KTX2 テクスチャの読み込み、バンドルの宣言と読み込み・解放、スマートフォンで落ちないためのメモリの見積もりと減らし方を扱う。3D で描くとき、ステージが複数あるとき、画像・音・モデルの合計が数 MiB を超えそうなとき、検証で MEMORY_ESTIMATE_LARGE が出たときに使う。three.js, GLB, GLTFLoader, bundles, memory.
+description: 3D のゲーム（同梱の Babylon.js の WebGPUEngine。WebGPU が無い端末は自動で WebGL2）と、素材が多い大きいゲーム（bundles/ への分割ダウンロード）を作る。GLB と KTX2 テクスチャの読み込み、バンドルの宣言と読み込み・解放、スマートフォンで落ちないためのメモリの見積もりと減らし方を扱う。3D で描くとき、ステージが複数あるとき、画像・音・モデルの合計が数 MiB を超えそうなとき、検証で MEMORY_ESTIMATE_LARGE が出たときに使う。Babylon.js, GLB, AssetContainer, bundles, memory.
 ---
 
 # 3D と大きいゲーム
@@ -20,17 +20,21 @@ description: 3D のゲーム（同梱の three.js の WebGPURenderer。WebGPU �
 ```
 
 ```ts
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { loadModel } from '@workspace/app-sdk/3d'
+import type { AssetContainer } from '@babylonjs/core/assetContainer.js'
 
+let stageAssets: AssetContainer | undefined
 async function enterStage2() {
   // background でも、使う前に必ず load する（裏での取得が終わっている保証は無い）
   await app.bundles.load('stage2', { onProgress: (loaded, total) => drawBar(loaded / total) })
-  const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/stage2/map.glb'))
-  scene.add(gltf.scene)
+  stageAssets = await loadModel('bundles/stage2/map.glb', scene)
+  stageAssets.addAllToScene()
 }
 
-// そのステージを抜けたら、three.js の資源を dispose() してからバンドルを解放する
+// モデル・マテリアル・テクスチャを解放してから blob URL を解放する
 function leaveStage2() {
+  stageAssets?.dispose()
+  stageAssets = undefined
   app.bundles.unload('stage2')
 }
 ```
@@ -64,43 +68,43 @@ function leaveStage2() {
 - リミックス元の ID が残っていても、同じ中身がこの App の台帳に写されていれば通る（リミックスは親の素材を台帳へ写す）
 - 手元の `kit.mjs check` は参照の中身を確かめられない（`LEDGER_NOT_CHECKED` の警告）。中身は push 後の Platform の検証が確かめる
 
-## 2. 3D（Kit の three.js）
+## 2. 3D（Kit の Babylon.js）
 
-- `package.json` に `"three": "file:/workspace/sdk/node_modules/three"`（`dependencies`）と
-  `"@types/three": "file:/workspace/sdk/node_modules/@types/three"`（`devDependencies`）を足す（Kit の lockfile で入っている版）。
-  `tsc` で型を確かめるなら `tsconfig.json` に `"skipLibCheck": true`。
-- three.js で `import` できるのは `three/webgpu`・`three/tsl`・`three/addons/*`（と `three`）だけ（build-config が Kit の three に解決する）。
-  `three/src/*` は解決できずビルドが失敗する。three.js のほかに入れられるのは Kit の phaser・Rapier だけ（`app-sdk/spec.md` §5）。
-- 3D の形式は **GLB 1 本**（`.gltf` + `.bin` の分割・Draco は使えない）。テクスチャは **KTX2**（下の「WebGPU と KTX2」）。
-  `EXT_meshopt_compression` の GLB は読める。そのときは
-  `import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'` を
-  `new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)` に渡す。
-- 画面は全面（`$game-screen-layout` §1 の three.js の行）。`app.lifecycle.onPause` で
-  `renderer.setAnimationLoop(null)` にして止める。
-- 操作は `$game-controls` の references/genres.md §10（左のスティックで移動、右半分のドラッグでカメラ。
-  マウスで視点を回す遊びは `$game-controls` の「マウス固定」）。
-- 生成モデルが無い・枠が無いときは、three.js の基本形状（Box / Sphere / Capsule）とマテリアルの色で作る。
-  それでも遊べるゲームにする。
+- `package.json` の `dependencies` に `"@babylonjs/core": "file:/workspace/sdk/node_modules/@babylonjs/core"` を足す。
+  GLB を読むときは同様に `@babylonjs/loaders`、Babylon GUI を使うときは `@babylonjs/gui` を足す。いずれも **9.29.0** で、型は同梱。
+- ESM の必要なモジュールだけを import する（例: `@babylonjs/core/scene`、`@babylonjs/core/Materials/PBR/pbrMaterial`）。
+  UMD の `babylonjs`、CDN、Inspector、Havok は使わない。依存は Kit の許可リストだけ（`app-sdk/spec.md` §5）。
+- 3D の形式は **GLB 1 本**（`.gltf` + `.bin` の分割・Draco は使えない）。テクスチャは **KTX2 / Basis**。
+  モデルの読み込みは SDK の `loadModel(path, scene)` を使う（`app.assets.url()` と GLB 拡張指定・ローダーの登録をまとめて扱う）。
+  `EXT_meshopt_compression` は同梱の meshoptimizer 1.2.0 の JS デコーダー（WASM 内包）で読む。Worker / CDN を使わない。
+- GLB は `AssetContainer` で持ち、`addAllToScene()` で表示する。同じモデルを複数表示するときは
+  `instantiateModelsToScene()` を使う。複製を片付けてから元の container を `dispose()` する。
+- 画面は全面（`$game-screen-layout` §1）。ポーズは `engine.stopRenderLoop()`、再開は同じフレーム関数で `engine.runRenderLoop(frame)`。
+- 操作は `$game-controls` の references/genres.md §10（左のスティックで移動、右半分のドラッグでカメラ）。
+  Babylon の `camera.attachControl()` でキーボード入力を二重に持たず、入力キットの値からカメラとキャラを動かす。
+- モデルが無いときは `MeshBuilder` の箱・球・カプセルと `StandardMaterial` / `PBRMaterial` の色で作る。
+- 3D の物理は `$game-physics` の Babylon Physics V2 / Havok。対戦はサーバーの結果を正とし、画面は補間する。
 
 ### WebGPU と KTX2（sdkVersion 2 の既定）
 
-**描画は `three/webgpu` の `WebGPURenderer`**（`manifest.json` の `renderer` は `"webgpu"`）。WebGPU が無い端末では自動で WebGL2 で描く。
-書き方の正本は `<kit>/sdk/app-sdk/spec.md` §10。次の 8 つを守る:
+**`@workspace/app-sdk/3d` の `createEngine(canvas)` を await してから Scene を作る**（`manifest.json` は `"renderer": "webgpu"`）。
+SDK が WebGPU の可否と初期化を確認し、使えなければ WebGL2 に切り替える。入力キットには
+`engine.getRenderingCanvas()` を渡す（GPU 初期化で canvas を置き換える場合がある）。API の正本は `<kit>/sdk/app-sdk/spec.md` §10。
 
-1. `import * as THREE from 'three/webgpu'`（`'three'` から `WebGLRenderer` を使わない）。Node material の色や模様は `three/tsl`
-2. `await renderer.init()` のあとに描く
-3. **最初の 1 枚を try し、失敗したら新しい canvas で `forceWebGL: true` の renderer を作り直す**（spec §10 の `createRenderer`。
-   adapter は取れたのに描けない端末がある）
-4. `ShaderMaterial` / GLSL を書かない（Node material / TSL）
-5. スマートフォンは `renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5))`
-6. 色の精度は既定（8 bit。`outputBufferType` は既定の `UnsignedByteType`）のまま。HDR の中間バッファを増やさない。
-   `requiredFeatures` / `requiredLimits` を指定しない（古い GPU の互換モード〔`featureLevel: 'compatibility'`〕でも動く範囲で書く）
-7. WebGPU だけの機能（compute）は `renderer.backend.isWebGPUBackend` のときだけ使い、無くても遊べるようにする
-8. 使い終わったら `dispose()`（下の §3）
+1. 描画は `engine.runRenderLoop(() => scene.render())`。終了時は `engine.stopRenderLoop()`、`scene.dispose()`、`engine.dispose()`。
+2. マテリアルは Babylon の `StandardMaterial` / `PBRMaterial` / `NodeMaterial`。独自 shader はネイティブ WGSL。GLSL → WebGPU の外部コンパイラを使わない。
+   独自 WGSL は WebGPU の飾りだけにし、WebGL2 では標準マテリアルで遊べるようにする。
+3. スマートフォンの描画解像度は DPR 1.5 まで。SDK の `createEngine` が設定する。画面サイズ変更で `engine.resize()`。
+4. compute など WebGPU 専用の飾りは `engine.isWebGPU` のときだけ使い、WebGL2 でも遊べるようにする。
+5. 最初の描画と素材の読み込みに失敗したらログとエラー表示を出す。白い画面のままにしない。
+6. GLB の animation は `container.animationGroups` から名前で選び `start(true)` で繰り返す。毎フレーム mixer を自作しない。
 
-**テクスチャは KTX2**（Basis Universal）: 画像を素材ツールの `convert_texture` で `.ktx2` にしてから同梱し、`KTX2Loader` で読む。
-トランスコーダ（`<kit>/sdk/app-sdk/basis/basis_transcoder.js` / `.wasm`。CSP で動くよう作り直したもの）を Artifact の `basis/` にコピーし、
-`LoadingManager.setURLModifier` で `app.assets.url()` に通す（spec §10 のコード）。PNG をそのまま 3D のテクスチャにしない。
+**テクスチャは KTX2（Basis Universal）**: 素材ツールの `convert_texture` で `.ktx2` にする。
+対応する helper をバンドルすると Kit が `basis/basis_transcoder.wasm` を Artifact に自動配置する。
+手でコピーしない。JS factory は静的バンドルに含まれる。
+`loadModel` がローカルのデコーダーを設定する。単体テクスチャは先に `initialize3dAssets()` を await してから
+`new Texture(app.assets.url(path), scene)` で読む（spec §10）。Babylon の既定 CDN URL に任せない（外部通信は不可）。
+PNG をそのまま大量の 3D テクスチャにしない。GLB の `KHR_texture_basisu` も同じデコーダーを使う。
 
 ## 3. メモリ（スマートフォンで落ちないために）
 
@@ -110,7 +114,7 @@ function leaveStage2() {
 | 素材 | 展開後の大きさ（目安） |
 |---|---|
 | 画像・テクスチャ（PNG / JPEG / WebP） | **幅 × 高さ × 4 byte × 4/3**。1024×1024 で約 5.3 MiB、2048×2048 で約 21 MiB（ファイルが 200 KB でも同じ） |
-| テクスチャ（KTX2 / Basis） | **幅 × 高さ × 1 byte × 4/3**（GPU の圧縮形式のまま持つ）。1024×1024 で約 1.3 MiB |
+| テクスチャ（KTX2 / Basis） | GPU 圧縮が使えると **幅 × 高さ × 約 1 byte × 4/3**。1024×1024 で約 1.3 MiB。使えない端末は RGBA に戻るため PNG と同じ量 |
 | GLB | 中のテクスチャ（同上）+ 頂点データ |
 | 音（MP3 など） | **秒数 × 48,000 × チャンネル数 × 4 byte**。ステレオ 1 分で約 22 MiB |
 
@@ -120,8 +124,8 @@ function leaveStage2() {
 - **テクスチャは 1 辺 1024px まで**を基本にする（2048px は画面の主役 1〜2 枚だけ）。
   UI・アイコン・遠くのものは 512px 以下。縦横は 2 のべき乗にする。
 - **ステージは 1 つずつ読む。** 次のステージの `app.bundles.load()` の前に、今のステージを片付ける:
-  - three.js: 使い終わった `geometry.dispose()` / `material.dispose()` / `texture.dispose()` を呼び、
-    `scene.remove()` する（`dispose()` しないと GPU のメモリは返らない）
+  - Babylon.js: 使い終わった `AssetContainer.dispose()` を呼ぶ。単体のメッシュは `mesh.dispose(false, true)`
+    （共有マテリアル・テクスチャは最後の利用者が片付ける）。`dispose()` しないと GPU のメモリは返らない
   - Canvas 2D: `createImageBitmap()` で作った画像は `bitmap.close()`、`Image` は参照を外す
   - 最後に `app.bundles.unload('<名前>')`
 - **BGM は `<audio>` で流す**（`const bgm = new Audio(app.assets.url('bundles/town/bgm.mp3')); bgm.loop = true`）。

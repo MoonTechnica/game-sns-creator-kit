@@ -24693,9 +24693,8 @@ var SERVER_RULES = [
 ];
 var SERVER_ALLOWED_IMPORTS = new Set([
   "@workspace/app-server-sdk",
-  "@dimforge/rapier3d-compat",
+  "@workspace/app-server-sdk/physics",
   "@dimforge/rapier2d-compat",
-  "@dimforge/rapier3d-deterministic-compat",
   "@dimforge/rapier2d-deterministic-compat"
 ]);
 var AI_PROMPT_PATH = /^ai\/([a-z0-9][a-z0-9_-]{0,31})\.md$/;
@@ -24814,8 +24813,8 @@ var DEVICE_USAGE = {
   motion: /\bdevice\s*\.\s*motion\b/,
   pointerLock: /(?<!\.webkitRequestPointerLock,[\w$]+\.)\brequestPointerLock\s*\(/
 };
-var USES_WEBGPU = /\bWebGPURenderer\b|['"]three\/webgpu['"]|\bnavigator\s*\.\s*gpu\b/;
-var USES_WEBGL = /\bWebGLRenderer\b|getContext\s*\(\s*['"](?:webgl2?|experimental-webgl)['"]/;
+var USES_WEBGPU = /\bWebGPUEngine\b|\bWebGPURenderer\b|['"]three\/webgpu['"]|\bnavigator\s*\.\s*gpu\b/;
+var USES_WEBGL = /\bThinEngine\b|\bWebGLRenderer\b|getContext\s*\(\s*['"](?:webgl2?|experimental-webgl)['"]/;
 var PHASER_LOADER_URL = /\.load\s*\.\s*(?:setBaseURL|setPath|script|scripts|multiatlas|pack|plugin|scenePlugin|sceneFile)\s*\(|\.load\s*\.\s*[A-Za-z]+\s*\(\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`|[\w$.]+)\s*,\s*['"`](?!data:)/;
 var PHASER_V3_API = /\.setPipeline\s*\(|\.(?:postFX|preFX)\b|\bBitmapMask\b|\bGeom\s*\.\s*Point\b|\bMath\s*\.\s*PI2\b|\bGenerateTexture\b/;
 function validateFeatures(manifest, files, options, errors3, warnings) {
@@ -24938,7 +24937,7 @@ function validateFeatures(manifest, files, options, errors3, warnings) {
   const phaser = uses(USES_PHASER);
   const mismatch = manifest.renderer === "webgpu" && !webgpu || manifest.renderer === "webgl2" && (webgpu || phaser) || manifest.renderer === "webgl" && (webgpu || !(phaser || webgl)) || manifest.renderer === "canvas2d" && (webgpu || webgl || phaser);
   if (mismatch) {
-    const found = phaser ? 'uses Phaser (declare "webgl")' : webgpu ? "uses WebGPURenderer (three/webgpu)" : webgl ? "uses WebGLRenderer" : "creates neither a WebGPURenderer (three/webgpu) nor a Phaser game";
+    const found = phaser ? 'uses Phaser (declare "webgl")' : webgpu ? "uses a WebGPU engine" : webgl ? "uses WebGLRenderer" : "creates neither a WebGPU engine nor a Phaser game";
     warnings.push({
       code: "RENDERER_MISMATCH",
       message: `the manifest declares renderer "${manifest.renderer}" but the code ${found}`
@@ -25005,7 +25004,7 @@ function validateServerBundle(server, errors3) {
       continue;
     errors3.push({
       code: "SERVER_EXTERNAL_IMPORT",
-      message: `server.bundle.js imports "${specifier}"; only @workspace/app-server-sdk and the bundled physics (@dimforge/rapier3d-compat / rapier2d-compat) are allowed`,
+      message: `server.bundle.js imports "${specifier}"; only @workspace/app-server-sdk, @workspace/app-server-sdk/physics and the bundled Rapier2D are allowed`,
       path: server.path
     });
   }

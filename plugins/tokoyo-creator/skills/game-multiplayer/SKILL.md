@@ -130,46 +130,22 @@ export default defineSpace({
 - 攻撃の出だし（予備動作）は 6 フレーム（100 ms）以上。構えを見せてから当てる。
 - 1 フレームの目押し・ジャストガードを勝敗の鍵にしない。判定は少し大きめに。
 - ダメージ・撃破・得点は**サーバーの状態が変わってから**演出する（画面で先に決めない）。
-- 自分の移動は予測ですぐ動かし、相手から受ける動き（ふっとび）は予測しない。
+- 自分の移動は予測ですぐ動かし、相手から受ける動き（ふっとび）は予測しない。ただし Havok の 3D 物理は自分もサーバーの状態を補間する。
 
-### 2.4 `step` で物理を使う（Rapier）
+### 2.4 `step` で物理を使う
 
-物理で動く対戦（押し合い・玉転がし・車・積み崩し）は、対戦サーバーでも同梱の Rapier を使える
-（`@dimforge/rapier3d-compat` / `rapier2d-compat`。**対戦サーバーは Kit と同じ版を持ち、`init()` も済ませてある**）。
-**画面の中（予測・練習モード）は `init()` されていない**ので、画面は `app.space.join` の前に `await RAPIER.init()` する（§5）。
-書き方の正本は `$game-physics`（同じ結果になる 5 つの規則）。対戦で守ることはこれだけ:
+**3D は Babylon Physics V2 / Havok、2D は Rapier の決定版**（`$game-physics`）。
+3D の物理は対戦サーバーを正とし、画面の予測・rollback で Havok の結果を再現しない。自分を含めた位置・向きは
+サーバーの状態を補間して描く。§2.2 と §5 の `predict.reconciler` は、Havok の物理には使わない。
 
-```ts
-import RAPIER from '@dimforge/rapier3d-compat'
-
-const worlds = new WeakMap<object, { world: RAPIER.World; bodies: Map<number, RAPIER.RigidBody> }>()
-
-export default defineSpace({
-  state: Arena,
-  input: Pad,
-  tickRate: 30,
-  setup(ctx) {
-    const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-    world.timestep = 1 / 30                        // 1 / tickRate に揃える
-    worlds.set(ctx.state, { world, bodies: new Map() })
-  },
-  onJoin(ctx, player) {
-    // 剛体は slot の昇順で足す（届いた順に任せない）。再接続なら足さない
-  },
-  step(ctx) {
-    const { world, bodies } = worlds.get(ctx.state)!
-    for (const player of [...ctx.players].sort((a, b) => a.slot - b.slot)) {
-      // 入力を力・速度にする（ctx.input(player.slot)）
-    }
-    world.step()                                   // 1 tick に 1 回
-    // 位置・向きを ctx.state に書く（画面はそれを補間して描く）
-  },
-})
-```
-
-- `world` は**卓ごとに 1 つ**（上のように `ctx.state` をキーにする）。モジュールの一番外に 1 つだけ作らない（同じ Sandbox の卓が相乗りする）。
-- 状態に書くのは描画に要る数値（位置・向き・速度）だけ。Rapier のオブジェクトを状態に入れない。
-- 画面の予測・練習モードは**同じ関数**（`server/main.ts` から export したもの）で同じ世界を作る。
+- 3D のルールは `@workspace/app-server-sdk/physics` の `createPhysicsScene` / `stepPhysics` と Babylon Physics V2 で書く。
+  サーバーの loader が Havok を初期化する。ブラウザは `app.space.join` の前に SDK の `await initPhysics()` を呼ぶ。
+- 物理 Scene は **卓ごとに 1 つ**（`ctx.state` をキーに `WeakMap` で保持）。描画 Scene と分離した NullEngine で動かす。
+  1 tick に `stepPhysics(physicsScene, ctx.dt)` を 1 回呼び、数値の位置・四元数・速度だけを状態へ写す。
+- オブジェクトの生成・破棄はルールから行い、卓の終了時は `disposePhysicsScene` で片付ける。
+  Babylon の Scene / PhysicsBody を状態に入れない。練習モードでは同じルールと headless Scene をブラウザで動かす。
+- 2D は `@dimforge/rapier2d-compat`（Kit の決定版 0.21.0）。サーバーは `init()` 済み。
+  ブラウザは `app.space.join` の前に `await RAPIER.init()` する。固定 dt と seed 付きの乱数、剛体の追加順を守る。
 
 ## 3. 人数と役割
 
@@ -211,7 +187,8 @@ import { app } from '@workspace/app-sdk'
 import definition, { move } from '../server/main'
 
 async function start() {
-  // await RAPIER.init()                            // 定義が Rapier を使うなら join の前に（§2.4）
+  // await initPhysics()                             // 3D の Havok を使う定義なら join の前に（§2.4）
+  // await RAPIER.init()                             // 2D の Rapier を使う定義なら join の前に
   const session = await app.space.join(definition)  // 席が用意されるまで待つ
   session.onChange(draw)
 }
@@ -225,8 +202,8 @@ start().catch((error: unknown) => showError(error))
 - **同時操作**: `requestAnimationFrame` の中で次のとおりに書く（`app-sdk/spec.md` §3.3 の例と同じ）。
   1. `const due = session.predict.tick(now)` の回数だけ `session.input.data` に今の操作（`$game-controls` の入力キットの値）を書いて
      `session.input.send()`
-  2. 自分は `session.predict.reconciler(me, { input: session.input, step: (ctx, s, i) => move(s, i, ctx.dt) })` の `value('x')` で描く
-  3. 相手は `session.predict.attachAll('fighters', { x: 'lerp' })` を 1 回呼んでおき、`session.predict.value(fighter, 'x')` で描く
+  2. Havok の物理を使わない場合、自分は `session.predict.reconciler(me, { input: session.input, step: (ctx, s, i) => move(s, i, ctx.dt) })` の `value('x')` で描く
+  3. 相手（Havok なら自分も）は `session.predict.attachAll('fighters', { x: 'lerp' })` を 1 回呼んでおき、`session.predict.value(fighter, 'x')` で描く
 - **毎フレーム `send` しない**（1 通 4 KiB・毎秒 60 通まで）。同時操作の入力は `input.send()`（1 tick に 1 つ）、
   `send` はボタンを押したときの一回きりの操作（アイテム使用・降参など）だけ。
 - **待機**: 人数がそろうまでは Platform の待機室が面倒を見る。App が起動したとき `mode()` が `null` なら、
@@ -266,14 +243,15 @@ start().catch((error: unknown) => showError(error))
 
 ## 8. 出力前のチェック
 
-- [ ] `server/main.ts` が `export default defineSpace({ … })` で、外部パッケージは `@workspace/app-server-sdk` と Rapier（§2.4）だけを import している（自分の `src/rules.ts`・`src/tuning.ts` は import してよい。DOM・SDK に触れないこと）
-- [ ] 定義が Rapier を使うなら、画面が `app.space.join` の前に `await RAPIER.init()` している（練習モード・予測が落ちる）
+- [ ] `server/main.ts` が `export default defineSpace({ … })` で、外部パッケージは `@workspace/app-server-sdk`（`/physics` を含む）と Rapier 2D（§2.4）だけを import している（自分の `src/rules.ts`・`src/tuning.ts` は import してよい。DOM・SDK に触れないこと）
+- [ ] 3D の Havok を使う定義なら画面が `app.space.join` の前に `await initPhysics()`、2D の Rapier なら `await RAPIER.init()` している
+- [ ] Havok の対戦はサーバーの状態を補間し、`predict.reconciler` に Havok の step を渡していない
 - [ ] Space ごとの値が `ctx.state`（か `ctx.state` をキーにした `WeakMap`）にあり、モジュールの変数に無い
 - [ ] schema の数値・真偽値・文字列の欄に `.default(…)` がある
 - [ ] 勝敗は定義だけが決め、`finish` は 1 回だけ・全員の slot に結果が入る（3 人以上は `ranks` も）
 - [ ] 時間切れ・全員の離脱でも決着する（`maxDurationSec` より前に自分で終える）
 - [ ] 不正な入力（手番違い・範囲外・重複・大きすぎ）を捨てる
-- [ ] `step` が `dt` と入力だけで決まる（時刻・乱数を直接読まない）。移動の計算を画面の予測と共用している
+- [ ] `step` が `dt` と入力だけで決まる（時刻・乱数を直接読まない）。予測する場合は移動の計算を共用している（Havok の対戦は予測せず補間）
 - [ ] 集まった人数（`min`〜`max`）のどれでも遊びが成立する。役割ごとの違いがある
 - [ ] 画面が毎フレーム `send` していない（同時操作は `input.send()` を `predict.tick` の回数だけ）
 - [ ] キーボードでもタッチでも同じ入力が届く

@@ -3,7 +3,7 @@
 `SKILL.md` §2 の 4 種類の出来事に、何をどれだけ出すか。数値は**既定の目安**で、遊びに合わせて上下してよい。
 ただし `SKILL.md` §5 の上限（画面の 20% 以上の点滅は 1 秒に 3 回まで・赤の全画面禁止）は超えない。
 
-目次: 1 量の表 / 2 共通の作り（`effects` とヒットストップ）/ 3 Canvas 2D / 4 Phaser 4 / 5 three.js / 6 効果音の 3 種類
+目次: 1 量の表 / 2 共通の作り（`effects` とヒットストップ）/ 3 Canvas 2D / 4 Phaser 4 / 5 Babylon.js / 6 効果音の 3 種類
 
 ## 1. 量の表
 
@@ -99,15 +99,15 @@ function burst(x: number, y: number, color: string) {
 | 浮かぶ数字 | `this.add.text(x, y, '+10', …)` を `tweens.add({ y: y - 40, alpha: 0, duration: 600, onComplete: () => t.destroy() })` |
 | ヒットストップ | 始めるときに `this.physics.pause()` と `this.tweens.pauseAll()`、`update` で `this.hitstop -= delta` し 0 以下で `resume()` / `resumeAll()`。その間はゲームの更新を飛ばし、`input.endFrame()` は呼ぶ。`time.delayedCall` で戻さない（`time.paused` と絡む） |
 
-## 5. three.js
+## 5. Babylon.js
 
 | 手応え | 書き方 |
 |---|---|
 | 揺れ | カメラの位置に `trauma² × maxOffset × 乱数`（`maxOffset` は 0.1〜0.3 ワールド単位）を毎フレーム足して描き、描いたら元に戻す。三人称なら `camera.rotation.z` に 2° 以内も可。**一人称は揺らさない**（`SKILL.md` §5） |
-| 点滅 | 当たったメッシュの `material.emissive` を 100ms だけ白に |
-| 伸び縮み | メッシュの `scale.set(1.2, 0.8, 1.2)` → 150ms でイージングして 1 へ |
-| パーティクル | `Points` か小さな `Sprite` を 10 個前後。使い回す（毎回 new しない） |
-| ヒットストップ | `renderer.setAnimationLoop` の中でゲームの `dt` を 0 にして `renderer.render` だけ続ける（Canvas 2D と同じ） |
+| 点滅 | 当たったメッシュの `StandardMaterial.emissiveColor` / `PBRMaterial.emissiveColor` を 100ms だけ白に |
+| 伸び縮み | メッシュの `scaling.set(1.2, 0.8, 1.2)` → 150ms でイージングして 1 へ |
+| パーティクル | Babylon の `ParticleSystem` か小さな `Sprite` を 10 個前後。使い回す（毎回 new しない） |
+| ヒットストップ | `engine.runRenderLoop` の中でゲームの `dt` を 0 にして `scene.render()` だけ続ける（Canvas 2D と同じ） |
 
 ## 6. 効果音の 3 種類
 

@@ -1,11 +1,11 @@
 ---
 name: game-3d-studio
-description: Blender（bpy）で 3D の素材を作る「3D スタジオ」。手続き的なモデリング（小物・建物・地形・ローポリのキャラ）、GLB の手直し（大きさ・原点・向き・デシメート・結合）、リグとアニメーション（自動ウェイト + フリー素材のクリップ + 生成したモーション〔FBX〕のリターゲット）、3D から 2D（8 方向スプライト・アイコン）、ベイク（AO・ライトマップ）に使う。three.js のコードで組めない形の GLB が要るとき、3D モデルを動かしたいとき、2D のゲームに 3D から描いたスプライトが欲しいときに使う。Blender, bpy, GLB, glTF, rig, sprite sheet, bake.
+description: Blender（bpy）で 3D の素材を作る「3D スタジオ」。手続き的なモデリング（小物・建物・地形・ローポリのキャラ）、GLB の手直し（大きさ・原点・向き・デシメート・結合）、リグとアニメーション（自動ウェイト + フリー素材のクリップ + 生成したモーション〔FBX〕のリターゲット）、3D から 2D（8 方向スプライト・アイコン）、ベイク（AO・ライトマップ）に使う。Babylon.js のコードで組めない形の GLB が要るとき、3D モデルを動かしたいとき、2D のゲームに 3D から描いたスプライトが欲しいときに使う。Blender, bpy, GLB, glTF, rig, sprite sheet, bake.
 ---
 
 # 3D スタジオ（Blender を使用）
 
-three.js のコードで組める形（箱・球・床・パーティクル）は、そのままコードで描くほうが安く速い。
+Babylon.js のコードで組める形（箱・球・床・パーティクル）は、そのままコードで描くほうが安く速い。
 **GLB が要る・リグやアニメーションを付ける・3D から 2D を描く・焼き込む**ときだけ使う。
 
 手元の Blender（4.5 LTS 以上。無ければ blender.org から無料で入る）を
@@ -38,7 +38,7 @@ Blender が無く、利用者が入れない場合は 3D スタジオを使わ�
 ## 3. 書き出し
 
 - GLB: `bpy.ops.export_scene.gltf` に `export_format="GLB"`・`export_meshopt_compression_enable=True`
-  （拡張は既定の `EXT_meshopt_compression`。three.js の `GLTFLoader` が読む）。
+  （拡張は既定の `EXT_meshopt_compression`。SDK の `loadModel` が同梱の Babylon glTF ローダーで読む）。
   テクスチャは GLB に埋め込まれる（別ファイルにしない）。
 - アニメーション: 1 動作 = 1 アクション。名前は `Idle` / `Walk` / `Run` / `Jump` / `Attack` のように英語の動詞。
   複数のアクションを出すときは NLA トラックに積んで `export_animation_mode="NLA_TRACKS"`。
@@ -95,7 +95,7 @@ Blender が無く、利用者が入れない場合は 3D スタジオを使わ�
 
 ### 4.5 ベイク
 
-AO やライトを Cycles でテクスチャに焼き込むと、three.js 側でライトを減らせる。
+AO やライトを Cycles でテクスチャに焼き込むと、Babylon.js 側でライトを減らせる。
 UV を展開（`smart_project`）→ 画像テクスチャのノードを作って選択 → `bpy.ops.object.bake(type="AO")` → PNG で保存。
 1024 px・32 サンプルで数秒〜十数秒。
 

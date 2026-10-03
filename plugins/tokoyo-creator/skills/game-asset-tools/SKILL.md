@@ -13,7 +13,7 @@ description: ゲームの絵と音を用意する。CC0 のフリー素材の探
 | **内蔵の画像生成が無い**（手元のエージェントなど） | 素材ツール `generate_image(name, prompt, size, transparent)` で作る。透過は `transparent=true` で 1 回で済む。画像の枠を 1 回使う | 結果の `download_url` から取得する（§4） |
 
 透過・3D・音は素材ツール（MCP）で作る。何を既存素材（CC0。§3.5）で済ませ、何を作るかは `$game-art-direction` §3 の判定表で決める。
-**ツール一覧に素材ツール（`list_assets` など）が無いとき**は、絵は Canvas（three.js）で描き、音は Web Audio で合成する。
+**ツール一覧に素材ツール（`list_assets` など）が無いとき**は、絵は Canvas（Babylon.js）で描き、音は Web Audio で合成する。
 
 ## 1. 最初にやること（ツールを呼ぶ前に）
 
@@ -91,19 +91,23 @@ description: ゲームの絵と音を用意する。CC0 のフリー素材の探
   // 毎フレーム: frame = walk[Math.floor(time * 10) % walk.length]
   ```
 
-- **3D は結果の `animations`**（クリップ名の一覧）を `AnimationMixer` で再生する（`$game-3d-and-bundles`）:
+- **3D は結果の `animations`**（クリップ名の一覧）を Babylon の `AnimationGroup` で再生する（`$game-3d-and-bundles`）:
 
-  ```js
+  ```ts
+  import { loadModel } from '@workspace/app-sdk/3d'
+
   async function loadHero() {
-    const gltf = await new GLTFLoader().loadAsync(app.assets.url('bundles/hero.glb'))
-    const mixer = new THREE.AnimationMixer(gltf.scene)
-    mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'walk')).play()
-    return mixer // 毎フレーム: mixer.update(deltaSeconds)
+    const hero = await loadModel('bundles/hero/hero.glb', scene)
+    hero.addAllToScene()
+    const walk = hero.animationGroups.find((group) => group.name === 'walk')
+    if (!walk) throw new Error('walk animation is missing')
+    walk.start(true)
+    return hero // 終了時に hero.dispose()
   }
   ```
 
   人型のアニメ集（`universal-animation-library`）は同じ骨格のモデル用。別のモデルに当てるなら
-  `three/addons/utils/SkeletonUtils.js` の `retargetClip` を使う。
+  `$game-3d-studio` で Blender 上でリターゲットして、対象モデルの GLB にクリップを含める。
 - 画像は PNG、音は MP3（元が OGG でも変換済み）、3D はテクスチャを埋め込んだ 1 つの GLB で届く。
 - 素材はどれも CC0（クレジット表記は不要。ゲームのページに Platform が出典をまとめて表示する）。
 - 3D の枠が閉じている（ツール一覧に `generate_model_3d` が無い）間は、3D の取り込みも `TOOL_NOT_ALLOWED` になる。
@@ -165,7 +169,7 @@ description: ゲームの絵と音を用意する。CC0 のフリー素材の探
 1. 元の画像を素材にする（内蔵の画像生成の PNG なら `upload_image` → アップロード。§3 の 2.）。
 2. `convert_texture(name, asset_id, mode, mipmaps)` を呼ぶ。色のテクスチャは `mode: "color"`（既定）、
    法線マップは `mode: "normal"`。3D の面に貼るものは `mipmaps: true`（既定）、画面に等倍で出すだけなら `false`。
-3. 結果の `download_url` を `suggested_path`（`assets/<name>.ktx2`）に取得し、`KTX2Loader` で読む（spec §10 のコード）。
+3. 結果の `download_url` を `suggested_path`（`assets/<name>.ktx2`）に取得し、Babylon のテクスチャとして読む（spec §10 のコード）。
 
 - 画像の枠を 1 回使う（費用はかからない）。WebP の素材は変換できない。
 - 2D のスプライト・UI の画像は PNG / WebP のままでよい（`<img>` や Canvas で描くもの）。
@@ -200,7 +204,7 @@ description: ゲームの絵と音を用意する。CC0 のフリー素材の探
     video.playsInline = true
     video.muted = true // 自動で流すなら muted が要る。音を出すのは最初の操作の後（`$game-controls` §3）
     await video.play()
-    // 描画に使うなら毎フレーム ctx.drawImage(video, …) / three.js は new THREE.VideoTexture(video)
+    // 描画に使うなら毎フレーム ctx.drawImage(video, …) / Babylon.js は VideoTexture（video 要素と scene を渡す。型は同梱の @babylonjs/core/Materials/Textures/videoTexture）
     // 終わったら video.pause(); video.removeAttribute('src'); app.bundles.unload('intro')
     return video
   }
